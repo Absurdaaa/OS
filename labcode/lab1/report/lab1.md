@@ -121,9 +121,9 @@ b *0x80200000
 Symbol "bootstacktop" is at 0x80203000 in a file compiled without debugging.
 ```
 
-![](labcode/lab1/report/img/addr.jpg)
+![](img/addr.jpg)
 
-3. 用指令查看附近的编译指令，发现和预期的auipc和addi指令不一样，这里用的是auipc和mv，这里由于预期的地址为0x80203000，并没有偏移地址，所以这里addi应该是加0，而`mv sp,sp` 是 `addi sp, sp, 0` 的伪指令，GDB的反汇编器将常见的指令序列转换回伪指令形式显示，所以显示的不一样。后面的j指令同样是伪指令。
+1. 用指令查看附近的编译指令，发现和预期的auipc和addi指令不一样，这里用的是auipc和mv，这里由于预期的地址为0x80203000，并没有偏移地址，所以这里addi应该是加0，而`mv sp,sp` 是 `addi sp, sp, 0` 的伪指令，GDB的反汇编器将常见的指令序列转换回伪指令形式显示，所以显示的不一样。后面的j指令同样是伪指令。
 
 ```Assembly
 (gdb) display/5i 0x80200000
@@ -135,11 +135,11 @@ Symbol "bootstacktop" is at 0x80203000 in a file compiled without debugging.
    0x8020000e <kern_init+4>:    addi    a0,a0,-2
 ```
 
-![](labcode/lab1/report/img/x5i.jpg)
+![](img/x5i.jpg)
 
 这里我们可以用si指令单步执行来对应指令，并同时用i r指令查看关键寄存器的状态。
 
-![](labcode/lab1/report/img/si.jpg)
+![](img/si.jpg)
 
 ---
 
