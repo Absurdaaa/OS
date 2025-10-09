@@ -121,7 +121,7 @@ b *0x80200000
 Symbol "bootstacktop" is at 0x80203000 in a file compiled without debugging.
 ```
 
-![](https://nankai.feishu.cn/space/api/box/stream/download/asynccode/?code=MmNiMTdlZTVkMzBmODNmMGM1MDlhMDdlOWU4NjcxYzZfbURyZkE4dDJXejZqWVJjT3ZqZkJyckxJQWhXa3lCSXZfVG9rZW46SXRqaGI3U2RPb2tlc0l4VG82cGNMRFh1bmtkXzE3NTk5MjU2OTg6MTc1OTkyOTI5OF9WNA)
+![](labcode/lab1/report/img/addr.jpg)
 
 3. 用指令查看附近的编译指令，发现和预期的auipc和addi指令不一样，这里用的是auipc和mv，这里由于预期的地址为0x80203000，并没有偏移地址，所以这里addi应该是加0，而`mv sp,sp` 是 `addi sp, sp, 0` 的伪指令，GDB的反汇编器将常见的指令序列转换回伪指令形式显示，所以显示的不一样。后面的j指令同样是伪指令。
 
@@ -135,11 +135,11 @@ Symbol "bootstacktop" is at 0x80203000 in a file compiled without debugging.
    0x8020000e <kern_init+4>:    addi    a0,a0,-2
 ```
 
-![](https://nankai.feishu.cn/space/api/box/stream/download/asynccode/?code=OTQyMTRhNjdlNjFmNDI0NmRhNmEzZGQ5NTkwOWJhMDVfM0hyUmh0cFJpa096OXVERzh6N1RyOFNKMGZacWxQZkVfVG9rZW46QklBZmJvcWJSb2dVRzJ4UTlwaGM3dW04bmVmXzE3NTk5MjU2OTg6MTc1OTkyOTI5OF9WNA)
+![](labcode/lab1/report/img/x5i.jpg)
 
 这里我们可以用si指令单步执行来对应指令，并同时用i r指令查看关键寄存器的状态。
 
-![](https://nankai.feishu.cn/space/api/box/stream/download/asynccode/?code=OWY0ZjE1MzVlM2I3MjY5Y2M5NzEyODdhODQxMTM2Y2NfMHJIMjRlTlN2dzVJVVlseURKajB0R3RSaWpWSkxGWEFfVG9rZW46SGxGeGJHMzFLbzdoZXR4T3FiV2NiUHpkbkFjXzE3NTk5MjU2OTg6MTc1OTkyOTI5OF9WNA)
+![](labcode/lab1/report/img/si.jpg)
 
 ---
 
