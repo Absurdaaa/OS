@@ -54,6 +54,74 @@
  *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
  *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.
  */
+/* 在“首次适配（first fit）”算法中，分配器维护一张空闲块链表（free list）。
+   当收到一条内存分配请求时，它沿着这张链表扫描，找到第一块
+   大小足以满足请求的空闲块。如果选中的空闲块明显大于请求的大小，
+   通常会把它拆分：前一部分分配给请求者，剩余部分作为新的空闲块
+   重新挂回空闲链表。
+   参考：严蔚敏《数据结构——C语言版》8.2节，第196～198页。
+*/
+
+// LAB2 练习 1：请在此处编写你的代码
+// 需要你改写的函数：default_init、default_init_memmap、default_alloc_pages、default_free_pages。
+/*
+ * FFMA（First-Fit Mem Alloc）实现细节
+ * (1) 预备：
+ *     为了实现首次适配的内存分配（FFMA），我们需要用某种链表来管理空闲内存块。
+ *     结构体 free_area_t 用于管理空闲块。首先请熟悉 list.h 中的双向链表实现 struct list。
+ *     需要掌握的用法：list_init、list_add（或 list_add_after）、list_add_before、
+ *                    list_del、list_next、list_prev。
+ *     另一个常用技巧是把通用的链表结点转回到特定的结构体（如 struct page）：
+ *     你可以使用一些宏，例如：le2page（在 memlayout.h 中；后续实验里还有
+ *     le2vma（vmm.h）、le2proc（proc.h）等）。
+ *
+ * (2) default_init：
+ *     可以复用示例中的 default_init 函数来初始化 free_list，并把 nr_free 置 0。
+ *     free_list 用来记录所有空闲块；nr_free 表示空闲块的总页数。
+ *
+ * (3) default_init_memmap：
+ *     调用关系：kern_init --> pmm_init --> page_init --> init_memmap --> pmm_manager->init_memmap
+ *     该函数用于初始化一段空闲块（参数为：addr_base，page_number）。
+ *     首先需要初始化这段空闲块内的每个 page（见 memlayout.h），包括：
+ *       - p->flags 要设置 PG_property 位（表示该页可用于分配。注意在 pmm.c 的 pmm_init 中，
+ *         p->flags 的 PG_reserved 位曾被设置过）。
+ *       - 如果该页空闲且不是空闲块的首页，则 p->property 置为 0；
+ *         如果该页空闲且是空闲块的首页，则 p->property 置为该块包含的页数。
+ *       - p->ref 置 0，因为此时页面空闲，无引用。
+ *       - 使用 p->page_link 把该页挂到 free_list 上（例如：
+ *         list_add_before(&free_list, &(p->page_link)); ）。
+ *     最后，累加空闲页数量：nr_free += n。
+ *
+ * (4) default_alloc_pages：
+ *     在 free_list 中查找第一块满足大小（block size >= n）的空闲块，必要时调整空闲块，
+ *     并返回分配到的页的起始地址。
+ *     (4.1) 按如下方式遍历空闲链表：
+ *           list_entry_t le = &free_list;
+ *           while ((le = list_next(le)) != &free_list) {
+ *               ...
+ *           }
+ *     (4.1.1) 在循环中，取出对应的 struct Page 并检查 p->property（记录该空闲块的页数）是否 >= n：
+ *             struct Page *p = le2page(le, page_link);
+ *             if (p->property >= n) { ... }
+ *     (4.1.2) 如果找到了 p，说明我们找到了一个大小足够的空闲块，其前 n 页可分配。
+ *             需要设置这些页的一些标志位：PG_reserved = 1，PG_property = 0；
+ *             并把这些页从 free_list 中摘链。
+ *             (4.1.2.1) 若 p->property > n，还需要重新计算该空闲块剩余部分的页数，
+ *                       例如： (le2page(le, page_link))->property = p->property - n;
+ *     (4.1.3) 重新计算 nr_free（所有空闲页的总数，扣除已分配的 n 页）。
+ *     (4.1.4) 返回 p。
+ *     (4.2) 如果找不到满足条件（block size >= n）的空闲块，则返回 NULL。
+ *
+ * (5) default_free_pages：
+ *     释放页并把它们重新挂回空闲链表，同时尽量把相邻的小空闲块合并为更大的空闲块。
+ *     (5.1) 根据被释放块的起始地址，在 free_list 中按地址从小到大找到正确插入位置，
+ *           然后把这些页插入（可能会用到 list_next、le2page、list_add_before）。
+ *     (5.2) 重置这些页的字段，比如 p->ref、p->flags（设置 PageProperty）。
+ *     (5.3) 尝试与低地址或高地址相邻的空闲块合并。注意：合并后要正确更新相关页的 p->property。
+ */
+
+
+
 static free_area_t free_area;
 
 #define free_list (free_area.free_list)
@@ -65,6 +133,9 @@ default_init(void) {
     nr_free = 0;
 }
 
+/**
+ * HQZ: 这个函数相当于是使用一个PAGE数组对一段物理内存的链表进行初始化，如果初始化为空得到的是大小为1的链表
+ */
 static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
@@ -83,10 +154,10 @@ default_init_memmap(struct Page *base, size_t n) {
         list_entry_t* le = &free_list;
         while ((le = list_next(le)) != &free_list) {
             struct Page* page = le2page(le, page_link);
-            if (base < page) {
+            if (base < page) {// 讲base插入到合适的地址
                 list_add_before(le, &(base->page_link));
                 break;
-            } else if (list_next(le) == &free_list) {
+            } else if (list_next(le) == &free_list) {// 这里是如果遍历到最后都没有合适的位置插入直接插入到最后
                 list_add(le, &(base->page_link));
             }
         }
@@ -110,7 +181,7 @@ default_alloc_pages(size_t n) {
     }
     if (page != NULL) {
         list_entry_t* prev = list_prev(&(page->page_link));
-        list_del(&(page->page_link));
+        list_del(&(page->page_link));// 如果page实际分走的页面比n多，那么就把剩下的部分重新插入到链表中
         if (page->property > n) {
             struct Page *p = page + n;
             p->property = page->property - n;
@@ -135,7 +206,7 @@ default_free_pages(struct Page *base, size_t n) {
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
-
+    // 这里处理和初始化一样
     if (list_empty(&free_list)) {
         list_add(&free_list, &(base->page_link));
     } else {
@@ -150,7 +221,7 @@ default_free_pages(struct Page *base, size_t n) {
             }
         }
     }
-
+    // 这里是看如果base前面的空间如果和base是连续的就合并
     list_entry_t* le = list_prev(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);
@@ -161,7 +232,7 @@ default_free_pages(struct Page *base, size_t n) {
             base = p;
         }
     }
-
+    // 这里是看如果base后面的空间如果和base是连续的就合并
     le = list_next(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);

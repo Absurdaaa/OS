@@ -50,6 +50,7 @@ struct Page {
 #define PageProperty(page)          (((page)->flags >> PG_property) & 1)
 
 // convert list entry to page
+// 通过这个得到的是一个得到整个结构体的首地址，实际上将链表的项转化为结构体page 
 #define le2page(le, member)                 \
     to_struct((le), struct Page, member)
 
