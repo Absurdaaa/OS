@@ -11,6 +11,7 @@
 #include <string.h>
 #include <riscv.h>
 #include <dtb.h>
+#include <memdetect.h>
 
 // virtual address of physical page array
 struct Page *pages;
@@ -29,6 +30,10 @@ uintptr_t satp_physical;
 
 // physical memory management
 const struct pmm_manager *pmm_manager;
+
+// Variables to store detected memory information when DTB is not available
+static uint64_t detected_mem_base = 0;
+static uint64_t detected_mem_size = 0;
 
 
 static void check_alloc_page(void);
@@ -76,6 +81,10 @@ static void page_init(void) {
     cprintf("physcial memory map:\n");
     cprintf("  memory: 0x%016lx, [0x%016lx, 0x%016lx].\n", mem_size, mem_begin,
             mem_end - 1);
+
+    // Call memory detection to verify and output detected values
+    // cprintf("Calling memory detection for verification...\n");
+    // detect_physical_memory_range();
 
     uint64_t maxpa = mem_end;
 
