@@ -130,7 +130,6 @@ buddy_system_alloc_pages(size_t n) {
 
     size_t current_order = order;
 
-    // 修复：查找空闲链表，如果当前order为空，则找更大的order
     while (current_order < MAX_ORDER && list_empty(&(free_area[current_order].free_list))) {
         current_order++;
     }
