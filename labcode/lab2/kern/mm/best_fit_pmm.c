@@ -93,9 +93,11 @@ best_fit_init_memmap(struct Page *base, size_t n) {
             if (base < page) {// 讲base插入到合适的地址
                 list_add_before(le, &(base->page_link));
                 break;
-            } else if (list_next(le) == &free_list) {// 这里是如果遍历到最后都没有合适的位置插入直接插入到最后
-                list_add(le, &(base->page_link));
             }
+        }
+        // 如果没有找到合适位置，说明 base 应该插在最后
+        if (le == &free_list) {
+            list_add_before(&free_list, &(base->page_link));
         }
     }
 }
@@ -164,9 +166,11 @@ best_fit_free_pages(struct Page *base, size_t n) {
             if (base < page) {
                 list_add_before(le, &(base->page_link));
                 break;
-            } else if (list_next(le) == &free_list) {
-                list_add(le, &(base->page_link));
             }
+        }
+        // 如果没有找到合适位置，说明 base 应该插在最后
+        if (le == &free_list) {
+            list_add_before(&free_list, &(base->page_link));
         }
     }
 
