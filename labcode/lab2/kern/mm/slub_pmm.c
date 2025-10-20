@@ -366,35 +366,35 @@ static void slub_init(void)
 
 static void slub_init_memmap(struct Page *base, size_t n)
 {
-  buddy_system_pmm_manager.init_memmap(base, n); // 复用 buddy  :contentReference[oaicite:8]{index=8}
+  buddy_system_pmm_manager.init_memmap(base, n); 
 }
 
 static struct Page *slub_alloc_pages(size_t n)
 {
-  return buddy_system_pmm_manager.alloc_pages(n); // 复用 buddy  :contentReference[oaicite:9]{index=9}
+  return buddy_system_pmm_manager.alloc_pages(n); 
 }
 
 static void slub_free_pages(struct Page *base, size_t n)
 {
-  buddy_system_pmm_manager.free_pages(base, n); // 复用 buddy  :contentReference[oaicite:10]{index=10}
+  buddy_system_pmm_manager.free_pages(base, n); 
 }
 
 static size_t slub_nr_free_pages(void)
 {
-  return buddy_system_pmm_manager.nr_free_pages(); // 复用 buddy  :contentReference[oaicite:11]{index=11}
+  return buddy_system_pmm_manager.nr_free_pages(); 
 }
 
-// 放在 slub_pmm.c 内，替换原有 slub_check() 实现
+
 static void slub_check(void)
 {
   extern const struct pmm_manager buddy_system_pmm_manager; // 如果你想顺带校验 buddy，可保留；不想就删掉这行和调用
 
 // ====== 工具：打印/断言 ======
 #ifndef SLUBCHK_PRINTF
-#define SLUBCHK_PRINTF cprintf // 你的内核一般有 cprintf；没有就改成 kprintf/printf
+#define SLUBCHK_PRINTF cprintf 
 #endif
 #ifndef SLUBCHK_ASSERT
-#define SLUBCHK_ASSERT assert // ucore 风格里通常有 assert
+#define SLUBCHK_ASSERT assert 
 #endif
 
   // ====== 前置：页数基线 ======
@@ -469,7 +469,7 @@ static void slub_check(void)
   SLUBCHK_PRINTF("[SLUB-CHECK] freelist LIFO reuse ✓\n");
 
   // ====== 5) 回收剩余所有对象：两个 slab 都应逐步被清空并释放回伙伴系统 ======
-  // 先把我们刚复用的那个也回收
+  // 先把刚复用的那个也回收
   kmem_cache_free(c64, tmp2);
 
   // 回收 cap 个（第一个 slab 的所有对象）
