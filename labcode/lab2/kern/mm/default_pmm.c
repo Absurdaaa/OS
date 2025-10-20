@@ -141,9 +141,9 @@ default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p = base;
     for (; p != base + n; p ++) {
-        assert(PageReserved(p));
-        p->flags = p->property = 0;
-        set_page_ref(p, 0);
+      assert(PageReserved(p)); // 要求这些页之前处于“保留/未加入分配器”的状态，避免重复加入
+      p->flags = p->property = 0;
+      set_page_ref(p, 0);
     }
     base->property = n;
     SetPageProperty(base);

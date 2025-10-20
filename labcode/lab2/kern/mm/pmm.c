@@ -1,6 +1,7 @@
 #include <default_pmm.h>
 #include <best_fit_pmm.h>
 #include <buddy_system_pmm.h>
+#include <slub_pmm.h>
 #include <defs.h>
 #include <error.h>
 #include <memlayout.h>
@@ -36,7 +37,8 @@ static void check_alloc_page(void);
 // init_pmm_manager - initialize a pmm_manager instance
 static void init_pmm_manager(void) {
     // pmm_manager = &default_pmm_manager;
-    pmm_manager = &buddy_system_pmm_manager;
+    // pmm_manager = &buddy_system_pmm_manager;
+    pmm_manager = &slub_pmm_manager;
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
@@ -111,6 +113,7 @@ void pmm_init(void) {
     // First we should init a physical memory manager(pmm) based on the framework.
     // Then pmm can alloc/free the physical memory.
     // Now the first_fit/best_fit/worst_fit/buddy_system pmm are available.
+    // 初始化页面分配器，修改这个函数里面的类来更换页面分配器
     init_pmm_manager();
 
     // detect physical memory space, reserve already used memory,

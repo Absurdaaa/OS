@@ -22,6 +22,9 @@ typedef unsigned int uint32_t;
 typedef long long int64_t;
 typedef unsigned long long uint64_t;
 
+typedef unsigned long long uintptr_t;
+typedef long long intptr_t;
+
 /* Add fast types */
 typedef signed char int_fast8_t;
 typedef short int_fast16_t;
