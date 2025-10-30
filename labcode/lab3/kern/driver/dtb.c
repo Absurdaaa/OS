@@ -113,13 +113,18 @@ void dtb_init(void) {
         cprintf("Error: DTB address is null\n");
         return;
     }
-    
-    // 转换为虚拟地址
+
+    // 转换为虚拟地址， PHYSICAL_MEMORY_OFFSET 是物理地址到虚拟地址的映射偏移量。
     uintptr_t dtb_vaddr = boot_dtb + PHYSICAL_MEMORY_OFFSET;
     const struct fdt_header *header = (const struct fdt_header *)dtb_vaddr;
     
     // 验证DTB
     uint32_t magic = fdt32_to_cpu(header->magic);
+    /**
+     * 这是用于检查设备树（DTB）文件头的魔数（magic number）是否正确。
+     * 0xd00dfeed 是DTB文件的标准魔数。
+     * 如果读取到的 magic 不等于这个值，说明DTB文件格式错误或数据损坏，于是打印错误信息并返回，不再继续解析DTB内容。
+     */
     if (magic != 0xd00dfeed) {
         cprintf("Error: Invalid DTB magic number: 0x%x\n", magic);
         return;
@@ -133,6 +138,7 @@ void dtb_init(void) {
         cprintf("  Size: 0x%016lx (%ld MB)\n", mem_size, mem_size / (1024 * 1024));
         cprintf("  End:  0x%016lx\n", mem_base + mem_size - 1);
         // 保存到全局变量，供 PMM 查询
+        // PMM（Physical Memory Management，物理内存管理）是操作系统内核中负责管理物理内存分配和释放的模块。它用于跟踪哪些物理内存已被使用、哪些空闲，并为内核或用户程序分配所需的物理内存页。
         memory_base = mem_base;
         memory_size = mem_size;
     } else {

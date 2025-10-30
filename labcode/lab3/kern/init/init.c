@@ -16,6 +16,8 @@ void grade_backtrace(void);
 int kern_init(void) {
     extern char edata[], end[];
     // 先清零 BSS，再读取并保存 DTB 的内存信息，避免被清零覆盖（为了解释变化 正式上传时我觉得应该删去这句话）
+    // 解释：BSS段用于存放未初始化的全局变量，memset会将其全部清零。
+    // 如果DTB（设备树）信息存放在BSS段中，必须先保存DTB内容，否则memset会把DTB数据清掉，导致后续无法获取设备信息。
     memset(edata, 0, end - edata);
     dtb_init();
     cons_init();  // init the console

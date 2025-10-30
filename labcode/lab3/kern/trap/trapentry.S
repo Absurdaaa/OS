@@ -1,11 +1,15 @@
 #include <riscv.h>
 
+    // 保存所有寄存器到栈
     .macro SAVE_ALL
 
+    // 将当前sp保存到sscratch，方便异常嵌套时恢复
     csrw sscratch, sp
 
+    // 为保存36个寄存器分配空间
     addi sp, sp, -36 * REGBYTES
-    # save x registers
+
+    # 依次保存x寄存器（x0~x31），x2为sp，x0为零寄存器
     STORE x0, 0*REGBYTES(sp)
     STORE x1, 1*REGBYTES(sp)
     STORE x3, 3*REGBYTES(sp)
@@ -38,31 +42,37 @@
     STORE x30, 30*REGBYTES(sp)
     STORE x31, 31*REGBYTES(sp)
 
-    # get sr, epc, badvaddr, cause
-    # Set sscratch register to 0, so that if a recursive exception
-    # occurs, the exception vector knows it came from the kernel
-    csrrw s0, sscratch, x0
-    csrr s1, sstatus
-    csrr s2, sepc
-    csrr s3, sbadaddr
-    csrr s4, scause
+    # 获取并保存异常相关寄存器
+    # s0: 原sscratch（sp），用于恢复
+    # s1: sstatus，保存异常前的状态
+    # s2: sepc，保存异常前的PC
+    # s3: sbadaddr，保存异常地址
+    # s4: scause，保存异常原因
+    csrrw s0, sscratch, x0      // 交换sscratch和x0（清零sscratch）
+    csrr s1, sstatus            // 读sstatus
+    csrr s2, sepc               // 读sepc
+    csrr s3, sbadaddr           // 读sbadaddr
+    csrr s4, scause             // 读scause
 
-    STORE s0, 2*REGBYTES(sp)
+    // 保存上述特殊寄存器
+    STORE s0, 2*REGBYTES(sp)    // 恢复sp用
     STORE s1, 32*REGBYTES(sp)
     STORE s2, 33*REGBYTES(sp)
     STORE s3, 34*REGBYTES(sp)
     STORE s4, 35*REGBYTES(sp)
     .endm
 
+    // 从栈恢复所有寄存器
     .macro RESTORE_ALL
 
+    // 恢复sstatus和sepc（异常返回需要）
     LOAD s1, 32*REGBYTES(sp)
     LOAD s2, 33*REGBYTES(sp)
 
     csrw sstatus, s1
     csrw sepc, s2
 
-    # restore x registers
+    # 恢复x寄存器（x1~x31），x2为sp，最后恢复
     LOAD x1, 1*REGBYTES(sp)
     LOAD x3, 3*REGBYTES(sp)
     LOAD x4, 4*REGBYTES(sp)
@@ -93,21 +103,23 @@
     LOAD x29, 29*REGBYTES(sp)
     LOAD x30, 30*REGBYTES(sp)
     LOAD x31, 31*REGBYTES(sp)
-    # restore sp last
+    # 最后恢复sp
     LOAD x2, 2*REGBYTES(sp)
     .endm
 
+    // 异常入口，全局符号
     .globl __alltraps
     .align(2)
 __alltraps:
-    SAVE_ALL
+    SAVE_ALL                   // 保存现场
 
-    move  a0, sp
-    jal trap
-    # sp should be the same as before "jal trap"
+    move  a0, sp               // 将sp传给trap函数（参数a0）
+    jal trap                   // 跳转到trap处理函数
+    # trap返回后，sp应与进入trap前一致
 
+    // 异常返回，全局符号
     .globl __trapret
 __trapret:
-    RESTORE_ALL
-    # return from supervisor call
-    sret
+    RESTORE_ALL                // 恢复现场
+    # 从supervisor模式返回
+    sret                       // 异常返回指令

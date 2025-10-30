@@ -32,6 +32,11 @@ void sbi_console_putchar(unsigned char ch) {
     sbi_call(SBI_CONSOLE_PUTCHAR, ch, 0, 0);
 }
 
+/*
+ * sbi_set_timer - 设置下一次定时器中断的时间
+ * @stime_value: 触发定时器中断的目标时间（CPU周期数）
+ * 通过SBI调用，通知底层固件在指定时间产生时钟中断。
+ */
 void sbi_set_timer(unsigned long long stime_value) {
     sbi_call(SBI_SET_TIMER, stime_value, 0, 0);
 }
