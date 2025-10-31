@@ -14,6 +14,8 @@
 
 int print_num = 0;    // 打印次数计数器,打印10次之后调用关机函数
 
+static inline int riscv_inst_length(uintptr_t epc);
+
 // print_ticks - 打印时钟中断次数
 static void print_ticks() {
     cprintf("%d ticks\n", TICK_NUM);
@@ -209,7 +211,7 @@ void exception_handler(struct trapframe *tf) {
             break;
         case CAUSE_ILLEGAL_INSTRUCTION:
              // 非法指令异常处理
-             /* LAB3 CHALLENGE3   YOUR CODE :  */
+             /* LAB3 CHALLENGE3   YOUR CODE : 2312999 */
             /*(1)输出指令异常类型（ Illegal instruction）
              *(2)输出异常指令地址
              *(3)更新 tf->epc寄存器
@@ -217,10 +219,18 @@ void exception_handler(struct trapframe *tf) {
             // 1. 打印非法指令异常信息
             // 2. 打印异常指令地址
             // 3. 跳过异常指令，更新 epc
-            break;
+            {
+                cprintf("Exception type:Illegal instruction\n");
+                uintptr_t ep = tf->epc;
+                cprintf("Illegal instruction caught at 0x%08x\n", (unsigned)ep);
+                int ilen = riscv_inst_length(ep); // 判断当前触发异常指令占多少字节
+                // 跳过触发异常的指令，继续执行后续指令
+                tf->epc = ep + ilen;
+                break;
+            }
         case CAUSE_BREAKPOINT:
             //断点异常处理
-            /* LAB3 CHALLLENGE3   YOUR CODE :  */
+            /* LAB3 CHALLLENGE3   YOUR CODE : 2312999 */
             /*(1)输出指令异常类型（ breakpoint）
              *(2)输出异常指令地址
              *(3)更新 tf->epc寄存器
@@ -228,7 +238,14 @@ void exception_handler(struct trapframe *tf) {
             // 1. 打印断点异常信息
             // 2. 打印异常指令地址
             // 3. 跳过断点指令，更新 epc
-            break;
+            {
+                cprintf("Exception type: breakpoint\n");
+                uintptr_t ep = tf->epc;
+                cprintf("ebreak caught at 0x%08x\n", (unsigned)ep);
+                int ilen = riscv_inst_length(ep);
+                tf->epc = ep + ilen;
+                break;
+            }
         case CAUSE_MISALIGNED_LOAD:
             // 加载地址未对齐异常
             break;
@@ -286,4 +303,12 @@ void trap(struct trapframe *tf) {
     // dispatch based on what type of trap occurred
     // 根据异常类型分发处理
     trap_dispatch(tf);
+}
+
+static inline int riscv_inst_length(uintptr_t epc) {
+    volatile uint16_t *p16 = (volatile uint16_t *)epc;
+    uint16_t low = *p16;
+    int len = (low & 0x3) != 0x3 ? 2 : 4;
+    // cprintf("riscv_inst_length: 0x%04x → %d bytes\n", low, len);
+    return len;
 }
