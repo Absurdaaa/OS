@@ -9,7 +9,10 @@
 // QEMU 缺省的RAM为 0x80000000到0x88000000, 128MiB, 0x80000000到0x80200000被OpenSBI占用
 #define KERNTOP             (KERNBASE + KMEMSIZE) // 0x88000000对应的虚拟地址
 
+#define PHYSICAL_MEMORY_END         0x88000000
 #define PHYSICAL_MEMORY_OFFSET      0xFFFFFFFF40000000
+#define KERNEL_BEGIN_PADDR          0x80200000
+#define KERNEL_BEGIN_VADDR          0xFFFFFFFFC0200000
 
 
 #define KSTACKPAGE          2                           // # of pages in kernel stack
@@ -18,7 +21,6 @@
 #ifndef __ASSEMBLER__
 
 #include <defs.h>
-#include <atomic.h>
 #include <list.h>
 
 typedef uintptr_t pte_t;
@@ -30,31 +32,32 @@ typedef uintptr_t pde_t;
  * that convert Page to other data types, such as physical address.
  * */
 struct Page {
-    int ref;                        // page frame's reference counter
-    uint64_t flags;                 // array of flags that describe the status of the page frame
-    unsigned int property;          // the num of free block, used in first fit pm manager
-    list_entry_t page_link;         // free list link
+    int ref;                        // page frame's reference counter 引用计数
+    uint64_t flags;                 // array of flags that describe the status of the page frame状态，表示
+    unsigned int property;          // the num of free block, used in first fit pm manager空间块大小
+    list_entry_t page_link;         // free list link 空闲页链表的节点
 };
 
 /* Flags describing the status of a page frame */
 #define PG_reserved                 0       // if this bit=1: the Page is reserved for kernel, cannot be used in alloc/free_pages; otherwise, this bit=0 
 #define PG_property                 1       // if this bit=1: the Page is the head page of a free memory block(contains some continuous_addrress pages), and can be used in alloc_pages; if this bit=0: if the Page is the the head page of a free memory block, then this Page and the memory block is alloced. Or this Page isn't the head page.
 
-#define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
-#define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
-#define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
-#define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
-#define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
-#define PageProperty(page)          test_bit(PG_property, &((page)->flags))
+#define SetPageReserved(page)       ((page)->flags |= (1UL << PG_reserved))
+#define ClearPageReserved(page)     ((page)->flags &= ~(1UL << PG_reserved))
+#define PageReserved(page)          (((page)->flags >> PG_reserved) & 1)
+#define SetPageProperty(page)       ((page)->flags |= (1UL << PG_property))
+#define ClearPageProperty(page)     ((page)->flags &= ~(1UL << PG_property))
+#define PageProperty(page)          (((page)->flags >> PG_property) & 1)
 
 // convert list entry to page
+// 通过这个得到的是一个得到整个结构体的首地址，实际上将链表的项转化为结构体page 
 #define le2page(le, member)                 \
     to_struct((le), struct Page, member)
 
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
 typedef struct {
-    list_entry_t free_list;         // the list header
-    unsigned int nr_free;           // number of free pages in this free list
+    list_entry_t free_list;         // the list header链表头
+    unsigned int nr_free;           // number of free pages in this free list空闲页的数量
 } free_area_t;
 
 #endif /* !__ASSEMBLER__ */

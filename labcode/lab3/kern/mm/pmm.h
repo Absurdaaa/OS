@@ -2,11 +2,12 @@
 #define __KERN_MM_PMM_H__
 
 #include <assert.h>
-#include <atomic.h>
 #include <defs.h>
 #include <memlayout.h>
 #include <mmu.h>
 #include <riscv.h>
+
+// #include <stdint.h>
 
 // pmm_manager is a physical memory management class. A special pmm manager -
 // XXX_pmm_manager
@@ -52,6 +53,23 @@ size_t nr_free_pages(void); // number of free pages
  * corresponding physical address.  It panics if you pass it a non-kernel
  * virtual address.
  * */
+/* *
+ * PADDR - 将一个内核虚拟地址（kernel virtual address，位于 KERNBASE 以上）
+ *         转换成对应的物理地址（physical address）。
+ *
+ * 设计背景：
+ *   在内核中，整个物理内存（假设最大 256MB）会被映射到
+ *   从 KERNBASE 开始的一段高端虚拟地址空间。
+ *   例如：
+ *       物理地址 0x00000000 → 虚拟地址 0xC0000000 （KERNBASE）
+ *       物理地址 0x00100000 → 虚拟地址 0xC0100000
+ *
+ *   因此两者的差就是 va_pa_offset。
+ *
+ * 宏的作用：
+ *   给定一个虚拟地址 kva，返回其对应的物理地址 pa。
+ *   若传入的地址低于 KERNBASE（不是内核高端映射区），则 panic。
+ * */
 #define PADDR(kva)                                                 \
     ({                                                             \
         uintptr_t __m_kva = (uintptr_t)(kva);                      \
@@ -64,8 +82,19 @@ size_t nr_free_pages(void); // number of free pages
 /* *
  * KADDR - takes a physical address and returns the corresponding kernel virtual
  * address. It panics if you pass an invalid physical address.
+ * 
+*/
+/* *
+ * KADDR - 将一个物理地址转换为对应的内核虚拟地址。
+ *
+ * 设计背景：
+ *   内核会在高端虚拟地址空间（KERNBASE 以上）映射整个物理内存。
+ *   因此：KVA = PA + va_pa_offset
+ *
+ * 宏的作用：
+ *   给定物理地址 pa，返回它对应的内核虚拟地址 kva。
+ *   若传入的物理页号超过最大页数 npage，则 panic。
  * */
-/*
 #define KADDR(pa)                                                \
     ({                                                           \
         uintptr_t __m_pa = (pa);                                 \
@@ -75,7 +104,7 @@ size_t nr_free_pages(void); // number of free pages
         }                                                        \
         (void *)(__m_pa + va_pa_offset);                         \
     })
-*/
+
 extern struct Page *pages;
 extern size_t npage;
 extern const size_t nbase;
@@ -83,6 +112,7 @@ extern uint64_t va_pa_offset;
 
 static inline ppn_t page2ppn(struct Page *page) { return page - pages + nbase; }
 
+// Page → 物理地址
 static inline uintptr_t page2pa(struct Page *page) {
     return page2ppn(page) << PGSHIFT;
 }
@@ -108,6 +138,18 @@ static inline struct Page *pa2page(uintptr_t pa) {
     }
     return &pages[PPN(pa) - nbase];
 }
+
+// Page -> 内核虚拟地址
+static inline void *page2kva(struct Page *page)
+{
+  return KADDR(page2pa(page));
+}
+// 内核虚拟地址 -> Page
+static inline struct Page *kva2page(void *kva)
+{
+  return pa2page(PADDR(kva));
+}
+
 static inline void flush_tlb() { asm volatile("sfence.vm"); }
 extern char bootstack[], bootstacktop[]; // defined in entry.S
 
