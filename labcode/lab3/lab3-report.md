@@ -124,7 +124,7 @@ asm volatile("ebreak");​          ​// 触发断点
 
 然后我们在终端中运行`make qemu`查看我们的测试结果，我们的测试结果以及对应的汇编代码如下：
 
-![](https://nankai.feishu.cn/space/api/box/stream/download/asynccode/?code=YzQ2NjYzNWUwMDczNDA0MmE5NzU2YmZhMDczN2IzNTFfR3FTUVVSbVNlejNNMXZqTFFUQWsxZTdpYU1xZEdsZ0dfVG9rZW46WlBYOWJYM2NJb29JRjB4V3RIMWM1UExnbmNiXzE3NjIwODU4MzQ6MTc2MjA4OTQzNF9WNA)![](https://nankai.feishu.cn/space/api/box/stream/download/asynccode/?code=NmE0MGNjMDg4ODhmZjA3YzdlOGFmOWZkM2IyZTc4ZjNfdU1lSzNKOHl2STZNR01SZFVnb0IyWUV2MW5QT2duOFBfVG9rZW46QVI4QmJ5RXR6b3VreHN4SUVOcGNBb09nblVYXzE3NjIwODU4MzQ6MTc2MjA4OTQzNF9WNA)
+![](/img/结果.png)![](/img/汇编.png)
 
 可以看到，我们的OS在正确的地址做出了正确的异常处理。
 
