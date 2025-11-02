@@ -16,8 +16,8 @@
 # define LWU      lw
 # define LOG_REGBYTES 2
 #endif
-#define REGBYTES (1 << LOG_REGBYTES)
-
+#define REGBYTES (1 << LREGBYTES)
+OG_
 #define MSTATUS_UIE         0x00000001
 #define MSTATUS_SIE         0x00000002
 #define MSTATUS_HIE         0x00000004
