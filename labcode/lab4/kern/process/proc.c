@@ -104,7 +104,39 @@ alloc_proc(void)
          *       uint32_t flags;                             // Process flag
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
+        /*
+         * 下面这些 proc_struct 中的字段需要被初始化：
+         *
+         *       enum proc_state state;        // 进程状态
+         *       int pid;                      // 进程 ID
+         *       int runs;                     // 进程已运行的次数
+         *       uintptr_t kstack;             // 进程的内核栈
+         *       volatile bool need_resched;   // 是否需要被重新调度以释放 CPU？
+         *       struct proc_struct *parent;   // 父进程
+         *       struct mm_struct *mm;         // 进程的内存管理信息
+         *       struct context context;       // 用于切换到该进程运行的上下文
+         *       struct trapframe *tf;         // 保存当前中断时的中断帧
+         *       uintptr_t pgdir;              // 页目录表（PDT）的基地址
+         *       uint32_t flags;               // 进程标志位
+         *       char name[PROC_NAME_LEN + 1]; // 进程名
+         */
         
+        //清空整个结构（其实这里偷鸡一下，从打印初始化的条件可以直接看出每个值的处理）
+        memset(proc, 0, sizeof(struct proc_struct));
+        proc->state = PROC_UNINIT;
+        proc->pid = -1;
+        proc->runs = 0;
+        proc->kstack = 0;
+        proc->need_resched = 0;
+        proc->parent = NULL;
+        proc->mm = NULL;
+        memset(&proc->context, 0, sizeof(proc->context));
+        proc->tf = NULL;
+        proc->pgdir = boot_pgdir_pa;
+        proc->flags = 0;
+        memset(proc->name, 0, sizeof(proc->name));
+        list_init(&proc->list_link);
+        list_init(&proc->hash_link);
     }
     return proc;
 }
