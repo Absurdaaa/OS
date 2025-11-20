@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "*.py": "python",
+        "kmalloc.h": "c",
+        "string.h": "c",
+        "proc.h": "c",
+        "memlayout.h": "c",
+        "trap.h": "c",
+        "defs.h": "c"
+    }
+}

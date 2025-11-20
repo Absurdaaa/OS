@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/libs",
+                "${workspaceFolder}/kern/debug",
+                "${workspaceFolder}/kern/driver",
+                "${workspaceFolder}/kern/trap",
+                "${workspaceFolder}/kern/mm",
+                "${workspaceFolder}/kern/sync",
+                "${workspaceFolder}/kern/process",
+                "${workspaceFolder}/kern/schedule"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

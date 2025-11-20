@@ -12,6 +12,12 @@
 #include <stdlib.h>
 #include <assert.h>
 
+// 这一行是要给 Visual Studio IntelliSense 用的，实际编译时不会定义 __INTELLISENSE__
+#ifdef __INTELLISENSE__
+#undef sstatus
+#define sstatus 0
+#endif
+
 /* ------------- process/thread mechanism design&implementation -------------
 (an simplified Linux process/thread mechanism )
 introduction:
@@ -354,6 +360,40 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     //    5. insert proc_struct into hash_list && proc_list
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
+
+    proc = alloc_proc();
+
+    if(proc == NULL)
+    {
+        goto fork_out;
+    }
+
+    if(setup_kstack(proc) < 0)
+    {
+        goto bad_fork_cleanup_proc;
+    }
+
+    if(copy_mm(clone_flags, proc) < 0)
+    {
+        goto bad_fork_cleanup_kstack;
+    }
+
+    copy_thread(proc, stack, tf);
+    
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        proc->parent = current;
+        proc->pid = get_pid();
+        hash_proc(proc);
+        list_add(&proc_list, &proc->list_link);
+        nr_process++;
+        proc->state = PROC_RUNNABLE;
+    }
+    local_intr_restore(intr_flag);
+    
+    ret = proc->pid;
+
     
 fork_out:
     return ret;
