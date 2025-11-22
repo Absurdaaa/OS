@@ -37,14 +37,7 @@ int kern_init(void) {
     clock_init();   // init clock interrupt
     intr_enable();  // enable irq interrupt
 
-    // 验证challenge请使用下面的两条指令
-    // asm volatile("ebreak");          // 触发断点
-    // asm volatile(".word 0xffffffff"); // 非法指令
 
-
-    /* do nothing */
-    while (1)
-        ;
 }
 
 void __attribute__((noinline))

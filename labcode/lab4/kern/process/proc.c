@@ -78,9 +78,10 @@ static list_entry_t hash_list[HASH_LIST_SIZE];
 struct proc_struct *idleproc = NULL;
 // init proc
 struct proc_struct *initproc = NULL;
-// current proc
+// current proc， 现在正在运行的进程
 struct proc_struct *current = NULL;
 
+// 进程数量
 static int nr_process = 0;
 
 void kernel_thread_entry(void);
@@ -127,7 +128,7 @@ alloc_proc(void)
          *       char name[PROC_NAME_LEN + 1]; // 进程名
          */
         
-        //清空整个结构（其实这里偷鸡一下，从打印初始化的条件可以直接看出每个值的处理）
+        //清空整个结构（其实这里偷鸡一下，从打印初始化的条件可以直接看出每个值的处理），666
         memset(proc, 0, sizeof(struct proc_struct));
         proc->state = PROC_UNINIT;
         proc->pid = -1;
@@ -209,20 +210,42 @@ get_pid(void)
 
 // proc_run - make process "proc" running on cpu
 // NOTE: before call switch_to, should load  base addr of "proc"'s new PDT
+// proc是准备要切换到的进程
+// NOTE:在调用switch_to之前，需要
 void proc_run(struct proc_struct *proc)
 {
+    // 检查要切换的进程是否与当前正在运行的进程相同，如果相同则不需要切换。
     if (proc != current)
     {
-        // LAB4:EXERCISE3 YOUR CODE
+        // LAB4:EXERCISE3 2312966
         /*
-         * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
-         * MACROs or Functions:
-         *   local_intr_save():        Disable interrupts
-         *   local_intr_restore():     Enable Interrupts
-         *   lsatp():                   Modify the value of satp register
-         *   switch_to():              Context switching between two processes
-         */
-
+        * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
+        * MACROs or Functions:
+        *   local_intr_save():        Disable interrupts
+        *   local_intr_restore():     Enable Interrupts
+        *   lsatp():                   Modify the value of satp register
+        *   switch_to():              Context switching between two processes
+        * 一些有用的宏、函数和常量定义，可在下面的实现中使用。
+        * local_intr_save()：禁用中断
+        * local_intr_restore()：启用中断
+        * lsatp()：修改 satp 寄存器的值
+        * switch_to()：在两个进程之间进行上下文切换
+        */
+        
+        // 1. 禁用中断，以防止在切换过程中被中断打断
+        bool intr_flag;
+        local_intr_save(intr_flag);
+        {
+            // 2.切换当前进程为要运行的进程。
+            struct proc_struct *prev = current;
+            current = proc;
+            // 3.切换页表，以便使用新进程的地址空间。
+            lsatp(proc->pgdir);
+            // 4.切换上下文，从当前进程切换到要运行的进程
+            switch_to(&(prev->context), &(proc->context));
+        }
+        // 5.允许中断
+        local_intr_restore(intr_flag);
     }
 }
 
@@ -235,7 +258,7 @@ forkret(void)
     forkrets(current->tf);
 }
 
-// hash_proc - add proc into proc hash_list
+// hash_proc - add proc into proc hash_list,， 添加进程到哈希列表中，以便通过 PID 快速查找
 static void
 hash_proc(struct proc_struct *proc)
 {
@@ -276,6 +299,7 @@ int kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags)
 }
 
 // setup_kstack - alloc pages with size KSTACKPAGE as process kernel stack
+// 申请进程的内核栈空间
 static int
 setup_kstack(struct proc_struct *proc)
 {
@@ -289,6 +313,7 @@ setup_kstack(struct proc_struct *proc)
 }
 
 // put_kstack - free the memory space of process kernel stack
+// 释放一个进程的内核栈空间
 static void
 put_kstack(struct proc_struct *proc)
 {
@@ -297,6 +322,7 @@ put_kstack(struct proc_struct *proc)
 
 // copy_mm - process "proc" duplicate OR share process "current"'s mm according clone_flags
 //         - if clone_flags & CLONE_VM, then "share" ; else "duplicate"
+// 复制或共享当前进程的内存管理信息
 static int
 copy_mm(uint32_t clone_flags, struct proc_struct *proc)
 {
@@ -307,6 +333,7 @@ copy_mm(uint32_t clone_flags, struct proc_struct *proc)
 
 // copy_thread - setup the trapframe on the  process's kernel stack top and
 //             - setup the kernel entry point and stack of process
+// 为新进程设置陷阱帧和上下文信息
 static void
 copy_thread(struct proc_struct *proc, uintptr_t esp, struct trapframe *tf)
 {
@@ -326,6 +353,7 @@ copy_thread(struct proc_struct *proc, uintptr_t esp, struct trapframe *tf)
  * @stack:       the parent's user stack pointer. if stack==0, It means to fork a kernel thread.
  * @tf:          the trapframe info, which will be copied to child process's proc->tf
  */
+// 创建一个新的子进程
 int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
 {
     int ret = -E_NO_FREE_PROC;
@@ -409,9 +437,27 @@ bad_fork_cleanup_proc:
 //   1. call exit_mmap & put_pgdir & mm_destroy to free the almost all memory space of process
 //   2. set process' state as PROC_ZOMBIE, then call wakeup_proc(parent) to ask parent reclaim itself.
 //   3. call scheduler to switch to other process
+/**
+ * 调用 exit_mmap、put_pgdir 和 mm_destroy 来释放进程几乎所有的内存空间。
+ * 将进程状态设为 PROC_ZOMBIE，然后调用 wakeup_proc(parent) 请求父进程回收它。
+ * 调用调度器切换到其他进程。
+ */
 int do_exit(int error_code)
 {
     panic("process exit!!.\n");
+    // HP：找不到这个需要调用的函数实现位置？
+    
+    // 1. 调用 exit_mmap、put_pgdir 和 mm_destroy 来释放进程几乎所有的内存空间。
+    // exit_mmap();
+    // put_pgdir();
+    // mm_destroy(current->mm);
+    
+    // // 2. 设置进程状态
+    // current->state = PROC_ZOMBIE;
+    // wakeup_proc(current->parent);
+    
+    // // 3. 切换
+    // schedule();
 }
 
 // init_main - the second kernel thread used to create user_main kernel threads
@@ -426,22 +472,28 @@ init_main(void *arg)
 
 // proc_init - set up the first kernel thread idleproc "idle" by itself and
 //           - create the second kernel thread init_main
+// 初始化0号进程和1号进程
+// idleproc 是第0号进程，用来空闲时运行，占位
+// initproc 是第1号进程，输出 “Hello World”，以验证内核线程的创建与调度机制是否正确
 void proc_init(void)
 {
     int i;
 
     list_init(&proc_list);
+    // 初始化哈希列表
     for (i = 0; i < HASH_LIST_SIZE; i++)
     {
         list_init(hash_list + i);
     }
 
+    // 给0号进程分配 proc_struct
     if ((idleproc = alloc_proc()) == NULL)
     {
         panic("cannot alloc idleproc.\n");
     }
 
     // check the proc structure
+    //初始化0号进程的各个字段，并检查 alloc_proc 是否正确初始化了这些字段
     int *context_mem = (int *)kmalloc(sizeof(struct context));
     memset(context_mem, 0, sizeof(struct context));
     int context_init_flag = memcmp(&(idleproc->context), context_mem, sizeof(struct context));
@@ -461,7 +513,7 @@ void proc_init(void)
     idleproc->need_resched = 1;
     set_proc_name(idleproc, "idle");
     nr_process++;
-
+    
     current = idleproc;
 
     int pid = kernel_thread(init_main, "Hello world!!", 0);
@@ -478,6 +530,7 @@ void proc_init(void)
 }
 
 // cpu_idle - at the end of kern_init, the first kernel thread idleproc will do below works
+// 在 kern_init 结束时，第一条内核线程 idleproc 会执行后面列出的工作（即进入 cpu_idle 循环，根据 need_resched 调度其他进程）。
 void cpu_idle(void)
 {
     while (1)

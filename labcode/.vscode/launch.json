@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/docay/OS/labcode/lab3/kern/mm",
-      "program": "/home/docay/OS/labcode/lab3/kern/mm/build/Debug/outDebug",
+      "cwd": "/home/docay/OS/labcode/lab4/kern/mm",
+      "program": "/home/docay/OS/labcode/lab4/kern/mm/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

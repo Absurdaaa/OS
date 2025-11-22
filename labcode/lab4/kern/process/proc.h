@@ -9,16 +9,16 @@
 // process's state in his life cycle
 enum proc_state
 {
-    PROC_UNINIT = 0, // uninitialized
-    PROC_SLEEPING,   // sleeping
-    PROC_RUNNABLE,   // runnable(maybe running)
+    PROC_UNINIT = 0, // uninitialized，未运行
+    PROC_SLEEPING,   // sleeping，等待唤醒
+    PROC_RUNNABLE,   // runnable(maybe running)，可运行
     PROC_ZOMBIE,     // almost dead, and wait parent proc to reclaim his resource
 };
-
+// 保存的是 RISC‑V 需在调用间保持不变的寄存器：ra、sp 以及所有 callee-saved 的 s0–s11。
 struct context
 {
-    uintptr_t ra;
-    uintptr_t sp;
+    uintptr_t ra; // 返回地址
+    uintptr_t sp; // 栈指针
     uintptr_t s0;
     uintptr_t s1;
     uintptr_t s2;
@@ -33,9 +33,9 @@ struct context
     uintptr_t s11;
 };
 
-#define PROC_NAME_LEN 15
-#define MAX_PROCESS 4096
-#define MAX_PID (MAX_PROCESS * 2)
+#define PROC_NAME_LEN 15  // 最大进程名字长度
+#define MAX_PROCESS 4096  // 最大进程数
+#define MAX_PID (MAX_PROCESS * 2) // 最大进程ID
 
 extern list_entry_t proc_list;
 
@@ -43,7 +43,7 @@ struct proc_struct
 {
     enum proc_state state;        // Process state
     int pid;                      // Process ID
-    int runs;                     // the running times of Proces
+    int runs;                     // the running times of Proces，这个进程的运行次数
     uintptr_t kstack;             // Process kernel stack
     volatile bool need_resched;   // bool value: need to be rescheduled to release CPU?
     struct proc_struct *parent;   // the parent process
@@ -57,6 +57,7 @@ struct proc_struct
     list_entry_t hash_link;       // Process hash list
 };
 
+// 宏定义：把 list_entry_t 类型的指针转换为 struct proc_struct 类型的指针
 #define le2proc(le, member) \
     to_struct((le), struct proc_struct, member)
 

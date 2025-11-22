@@ -173,6 +173,7 @@ void insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma)
 }
 
 // mm_destroy - free mm and mm internal fields
+// 释放mm
 void mm_destroy(struct mm_struct *mm)
 {
 

@@ -4,6 +4,7 @@
 #include <sched.h>
 #include <assert.h>
 
+// 唤醒进程，判断状态
 void
 wakeup_proc(struct proc_struct *proc) {
     assert(proc->state != PROC_ZOMBIE && proc->state != PROC_RUNNABLE);
@@ -28,6 +29,7 @@ schedule(void) {
                 }
             }
         } while (le != last);
+        // 没有下一个可运行的进程，就运行 idleproc
         if (next == NULL || next->state != PROC_RUNNABLE) {
             next = idleproc;
         }
