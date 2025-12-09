@@ -1,4 +1,4 @@
-#include <best_fit_pmm.h>
+#include <default_pmm.h>
 #include <defs.h>
 #include <error.h>
 #include <kmalloc.h>
@@ -38,7 +38,7 @@ static void check_boot_pgdir(void);
 static void init_pmm_manager(void)
 {
     // Switch to best-fit physical page allocator
-    pmm_manager = &best_fit_pmm_manager;
+    pmm_manager = &default_pmm_manager;
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
@@ -398,32 +398,17 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
                 return -E_NO_MEM;
             }
             uint32_t perm = (*ptep & PTE_USER);
-            // get page from ptep
             struct Page *page = pte2page(*ptep);
-            // alloc a page for process B
-            struct Page *npage = alloc_page();
-            assert(page != NULL);
-            assert(npage != NULL);
-            int ret = 0;
-            /* LAB5:EXERCISE2 YOUR CODE
-             * replicate content of page to npage, build the map of phy addr of
-             * nage with the linear addr start
-             *
-             * Some Useful MACROs and DEFINEs, you can use them in below
-             * implementation.
-             * MACROs or Functions:
-             *    page2kva(struct Page *page): return the kernel vritual addr of
-             * memory which page managed (SEE pmm.h)
-             *    page_insert: build the map of phy addr of an Page with the
-             * linear addr la
-             *    memcpy: typical memory copy function
-             *
-             * (1) find src_kvaddr: the kernel virtual address of page
-             * (2) find dst_kvaddr: the kernel virtual address of npage
-             * (3) memory copy from src_kvaddr to dst_kvaddr, size is PGSIZE
-             * (4) build the map of phy addr of  nage with the linear addr start
-             */
+            // 对可写用户页启用 COW：清除写位，打上 COW 标记，后续写时再复制
+            if (perm & PTE_W)
+            {
+                perm = (perm & ~PTE_W) | PTE_COW;
+                *ptep = (*ptep & ~PTE_W) | PTE_COW;
+                // 父进程 PTE 已改，刷新对应 TLB 项避免继续以可写权限使用旧映射
+                tlb_invalidate(from, start);
+            }
 
+            int ret = page_insert(to, page, start, perm);
             assert(ret == 0);
         }
         start += PGSIZE;

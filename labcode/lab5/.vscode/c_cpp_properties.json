@@ -1,0 +1,30 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/libs",
+                "${workspaceFolder}/kern/debug",
+                "${workspaceFolder}/kern/driver",
+                "${workspaceFolder}/kern/trap",
+                "${workspaceFolder}/kern/mm",
+                "${workspaceFolder}/kern/libs",
+                "${workspaceFolder}/kern/sync",
+                "${workspaceFolder}/kern/fs",
+                "${workspaceFolder}/kern/process",
+                "${workspaceFolder}/kern/schedule",
+                "${workspaceFolder}/kern/syscall"
+            ],
+            "defines": [
+                "__riscv_xlen=64",
+                "__GNUC__"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu99",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "configurationProvider": "ms-vscode.makefile-tools"
+        }
+    ],
+    "version": 4
+}

@@ -5,6 +5,7 @@
 #include <slub_pmm.h>
 #include <stdio.h>
 #include <buddy_system_pmm.h> // 直接复用伙伴系统做页分配  :contentReference[oaicite:2]{index=2}
+#include <kmalloc.h> // for kmalloc/kfree declarations
 
 /*
  * 设计说明（简化版）：
@@ -310,7 +311,7 @@ static struct kmem_cache *select_cache(size_t size)
   return NULL;
 }
 
-void *kmalloc(size_t size)
+void *slub_kmalloc(size_t size)
 {
   init_size_caches();
   struct kmem_cache *c = select_cache(size);
@@ -323,7 +324,7 @@ void *kmalloc(size_t size)
   return p ? page2kva(p) : NULL;
 }
 
-void kfree(void *ptr, size_t size_hint /* 可传0 */)
+void slub_kfree(void *ptr, size_t size_hint /* 可传0 */)
 {
   if (!ptr)
     return;
@@ -481,7 +482,7 @@ static void slub_check(void)
   }
 
   // 释放临时数组（这块是 kmalloc 的内存）
-  kfree(objs, sizeof(void *) * (cap + 2));
+  kfree(objs);
 
   // cache 仍然存在，slab 清空后应已释放回伙伴系统（本实现中空 slab 立刻释放）
   size_t free2 = buddy_system_pmm_manager.nr_free_pages();
@@ -501,7 +502,7 @@ static void slub_check(void)
   SLUBCHK_ASSERT(p200 != NULL);
   // kfree 需要传 hint（你的实现里无 slab 头无法识别就按页回收），
   // 这里 p200 应该来自 slab，所以不传 hint，让它走 obj 回收路径（obj_to_slab 能识别）
-  kfree(p200, 0);
+  kfree(p200);
   size_t fB = buddy_system_pmm_manager.nr_free_pages();
   SLUBCHK_ASSERT(fB == fA);
   SLUBCHK_PRINTF("[SLUB-CHECK] kmalloc(200)/kfree → via size-class ✓\n");
@@ -514,7 +515,7 @@ static void slub_check(void)
   SLUBCHK_ASSERT(pbig != NULL);
   size_t fD = buddy_system_pmm_manager.nr_free_pages();
   SLUBCHK_ASSERT((fC - fD) == need_pages);
-  kfree(pbig, big); // 大块必须带 hint，以免按 1 页错误归还
+  kfree(pbig); // 大块必须带 hint，以免按 1 页错误归还
   size_t fE = buddy_system_pmm_manager.nr_free_pages();
   SLUBCHK_ASSERT(fE == fC);
   SLUBCHK_PRINTF("[SLUB-CHECK] kmalloc(%u)/kfree %u → via page allocator (%u pages) ✓\n",
@@ -552,7 +553,7 @@ static void slub_check(void)
     if (arr[i])
       kmem_cache_free(c64b, arr[i]);
   }
-  kfree(arr, sizeof(void *) * (cap + 4));
+  kfree(arr);
 
   kmem_cache_destroy(c64b);
   size_t fZ = buddy_system_pmm_manager.nr_free_pages();

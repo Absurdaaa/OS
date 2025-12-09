@@ -80,6 +80,9 @@
 #define PTE_D 0x080    // Dirty
 #define PTE_SOFT 0x300 // Reserved for Software
 
+// 使用软件位 0x100 作为 COW 标记（不会影响硬件译码）
+#define PTE_COW 0x100
+
 #define PAGE_TABLE_DIR (PTE_V)
 #define READ_ONLY (PTE_R | PTE_V)
 #define READ_WRITE (PTE_R | PTE_W | PTE_V)

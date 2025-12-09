@@ -481,22 +481,25 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     }
 
     copy_thread(proc, stack, tf);
-    
+
     bool intr_flag;
     local_intr_save(intr_flag);
     {
+        // LAB5: set parent relation and reset parent's wait state
         proc->parent = current;
+        current->wait_state = 0;
+
         proc->pid = get_pid();
         hash_proc(proc);
-        list_add(&proc_list, &proc->list_link);
-        nr_process++;
+        // Insert into global lists and parent/child links
+        set_links(proc);
+
         proc->state = PROC_RUNNABLE;
     }
     local_intr_restore(intr_flag);
-    
+
     ret = proc->pid;
 
-    
     // LAB5 YOUR CODE : (update LAB4 steps)
     // TIPS: you should modify your written code in lab4(step1 and step5), not add more code.
     /* Some Functions
@@ -603,7 +606,7 @@ load_icode(unsigned char *binary, size_t size)
         goto bad_pgdir_cleanup_mm;
     }
     //(3) copy TEXT/DATA section, build BSS parts in binary to memory space of process
-    struct Page *page;
+    struct Page *page = NULL;
     //(3.1) get the file header of the bianry program (ELF format)
     struct elfhdr *elf = (struct elfhdr *)binary;
     //(3.2) get the entry of the program section headers of the bianry program (ELF format)
@@ -739,6 +742,9 @@ load_icode(unsigned char *binary, size_t size)
      *          tf->status should be appropriate for user program (the value of sstatus)
      *          hint: check meaning of SPP, SPIE in SSTATUS, use them by SSTATUS_SPP, SSTATUS_SPIE(defined in risv.h)
      */
+    tf->gpr.sp = USTACKTOP;                // user stack pointer
+    tf->epc = elf->e_entry;                // entry address of user program
+    tf->status = (sstatus & ~SSTATUS_SPP & ~SSTATUS_SIE) | SSTATUS_SPIE; // return to U-mode with interrupts enabled after sret
 
     ret = 0;
 out:
@@ -971,13 +977,18 @@ init_main(void *arg)
     }
 
     cprintf("all user-mode processes have quit.\n");
-    assert(initproc->cptr == NULL && initproc->yptr == NULL && initproc->optr == NULL);
+    assert(
+        initproc->cptr == NULL && initproc->yptr == NULL && initproc->optr == NULL);
     assert(nr_process == 2);
     assert(list_next(&proc_list) == &(initproc->list_link));
     assert(list_prev(&proc_list) == &(initproc->list_link));
 
     cprintf("init check memory pass.\n");
-    return 0;
+    // LAB5: initproc 不应退出，否则会触发 panic；保持调度占位
+    while (1)
+    {
+        schedule();
+    }
 }
 
 // proc_init - set up the first kernel thread idleproc "idle" by itself and

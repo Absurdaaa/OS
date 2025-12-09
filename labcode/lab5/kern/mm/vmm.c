@@ -8,6 +8,8 @@
 #include <riscv.h>
 #include <kmalloc.h>
 
+volatile unsigned int pgfault_num = 0;
+
 /*
   vmm design include two parts: mm_struct (mm) & vma_struct (vma)
   mm is the memory manager for the set of continuous virtual memory
@@ -36,6 +38,20 @@
 
 static void check_vmm(void);
 static void check_vma_struct(void);
+
+static inline uint32_t
+perm_from_flags(uint32_t vm_flags)
+{
+    // 将 VMA 的读/写/执行标志翻译为 PTE 权限，便于按需缺页分配
+    uint32_t perm = PTE_U;
+    if (vm_flags & VM_READ)
+        perm |= PTE_R;
+    if (vm_flags & VM_WRITE)
+        perm |= PTE_W | PTE_R;
+    if (vm_flags & VM_EXEC)
+        perm |= PTE_X;
+    return perm;
+}
 
 // mm_create -  alloc a mm_struct & initialize it.
 struct mm_struct *
@@ -348,6 +364,67 @@ check_vma_struct(void)
     mm_destroy(mm);
 
     cprintf("check_vma_struct() succeeded!\n");
+}
+
+// do_pgfault - 处理缺页，包括：未映射时的按需分配，以及写访问触发的 COW 写时复制
+int do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr)
+{
+    pgfault_num++;
+
+    if (mm == NULL)
+    {
+        return -E_INVAL;
+    }
+
+    struct vma_struct *vma = find_vma(mm, addr);
+    if (vma == NULL || addr < vma->vm_start)
+    {
+        return -E_INVAL;
+    }
+
+    bool write = (error_code & 0x2) != 0;
+    uintptr_t la = ROUNDDOWN(addr, PGSIZE);
+    pte_t *ptep = get_pte(mm->pgdir, la, 0);
+
+    if (ptep == NULL || !(*ptep & PTE_V))
+    {
+        // 未映射：按 VMA 权限分配新页（需求分配），并建立 PTE
+        uint32_t perm = perm_from_flags(vma->vm_flags);
+        if (pgdir_alloc_page(mm->pgdir, la, perm) == NULL)
+        {
+            return -E_NO_MEM;
+        }
+        return 0;
+    }
+
+    // 写访问命中 COW：复制或直接去掉 COW 置可写
+    if (write && (*ptep & PTE_COW))
+    {
+        uint32_t perm = (*ptep & PTE_USER);
+        struct Page *page = pte2page(*ptep);
+
+        if (page_ref(page) > 1)
+        {
+            struct Page *npage = alloc_page();
+            if (npage == NULL)
+            {
+                return -E_NO_MEM;
+            }
+            memcpy(page2kva(npage), page2kva(page), PGSIZE);
+            int ret = page_insert(mm->pgdir, npage, la, (perm & ~PTE_COW) | PTE_W);
+            return ret;
+        }
+        else
+        {
+            // 已独占：直接恢复写权限并清掉 COW 标记
+            *ptep = (*ptep | PTE_W) & ~PTE_COW;
+            tlb_invalidate(mm->pgdir, la);
+            return 0;
+        }
+    }
+
+    // 其他类型缺页未在此处理
+    return -E_INVAL;
 }
 bool user_mem_check(struct mm_struct *mm, uintptr_t addr, size_t len, bool write)
 {

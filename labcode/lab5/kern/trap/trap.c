@@ -134,6 +134,11 @@ void interrupt_handler(struct trapframe *tf)
             print_num++;
             print_ticks();
         }
+        // 周期性请求调度，实现基于时钟的抢占
+        if (current != NULL)
+        {
+            current->need_resched = 1;
+        }
         if (print_num == 10)
         {
             cprintf("Calling SBI shutdown...\n");
@@ -217,13 +222,28 @@ void exception_handler(struct trapframe *tf)
         cprintf("Environment call from M-mode\n");
         break;
     case CAUSE_FETCH_PAGE_FAULT:
-        cprintf("Instruction page fault\n");
+        // 页级取指缺页，交由 do_pgfault（含 COW/按需分配）处理
+        if (do_pgfault(current->mm, 0, tf->tval) != 0)
+        {
+            print_trapframe(tf);
+            panic("unhandled instruction page fault\n");
+        }
         break;
     case CAUSE_LOAD_PAGE_FAULT:
-        cprintf("Load page fault\n");
+        // 读缺页
+        if (do_pgfault(current->mm, 0, tf->tval) != 0)
+        {
+            print_trapframe(tf);
+            panic("unhandled load page fault\n");
+        }
         break;
     case CAUSE_STORE_PAGE_FAULT:
-        cprintf("Store/AMO page fault\n");
+        // 写缺页，error_code 置写标志 0x2 触发 COW 分支
+        if (do_pgfault(current->mm, 0x2, tf->tval) != 0)
+        {
+            print_trapframe(tf);
+            panic("unhandled store page fault\n");
+        }
         break;
     default:
         print_trapframe(tf);
