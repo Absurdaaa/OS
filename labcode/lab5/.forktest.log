@@ -31,9 +31,9 @@ DTB init completed
 
 Special kernel symbols:
   entry  0xc020004a (virtual)
-  etext  0xc020588c (virtual)
-  edata  0xc02a62e0 (virtual)
-  end    0xc02aa794 (virtual)
+  etext  0xc020589c (virtual)
+  edata  0xc02a6250 (virtual)
+  end    0xc02aa704 (virtual)
 Kernel executable memory footprint: 682KB
 memory management: default_pmm_manager
 physcial memory map:
@@ -52,7 +52,6 @@ Breakpoint
 I am child 19
 I am child 18
 I am child 17
-I am child 16
 I am child 15
 I am child 14
 I am child 13
