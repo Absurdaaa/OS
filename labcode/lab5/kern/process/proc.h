@@ -47,7 +47,7 @@ struct proc_struct
     uintptr_t kstack;                       // Process kernel stack
     volatile bool need_resched;             // bool value: need to be rescheduled to release CPU?
     struct proc_struct *parent;             // the parent process
-    struct mm_struct *mm;                   // Process's memory management field
+    struct mm_struct *mm;                   // Process's memory management field 进程的内存管理字段
     struct context context;                 // Switch here to run process
     struct trapframe *tf;                   // Trap frame for current interrupt
     uintptr_t pgdir;                        // the base addr of Page Directroy Table(PDT)
@@ -56,14 +56,14 @@ struct proc_struct
     list_entry_t list_link;                 // Process link list
     list_entry_t hash_link;                 // Process hash list
     int exit_code;                          // exit code (be sent to parent proc)
-    uint32_t wait_state;                    // waiting state
-    struct proc_struct *cptr, *yptr, *optr; // relations between processes
+    uint32_t wait_state;                    // waiting state等待状态
+    struct proc_struct *cptr, *yptr, *optr; // relations between processes // 父亲的第一个子进程, younger兄弟进程, older兄弟进程
 };
 
 #define PF_EXITING 0x00000001 // getting shutdown
 
-#define WT_CHILD (0x00000001 | WT_INTERRUPTED)
-#define WT_INTERRUPTED 0x80000000 // the wait state could be interrupted
+#define WT_CHILD (0x00000001 | WT_INTERRUPTED) // 正在等待子进程，并且可以被中断
+#define WT_INTERRUPTED 0x80000000 // the wait state could be interrupted // 等待状态可以被中断
 
 #define le2proc(le, member) \
     to_struct((le), struct proc_struct, member)

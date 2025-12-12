@@ -31,9 +31,9 @@ DTB init completed
 
 Special kernel symbols:
   entry  0xc020004a (virtual)
-  etext  0xc020588c (virtual)
-  edata  0xc02a62e0 (virtual)
-  end    0xc02aa794 (virtual)
+  etext  0xc020589c (virtual)
+  edata  0xc02a6250 (virtual)
+  end    0xc02aa704 (virtual)
 Kernel executable memory footprint: 682KB
 memory management: default_pmm_manager
 physcial memory map:
@@ -89,6 +89,6 @@ trapframe at 0xffffffffc04b0ee0
   epc      0x008005f0
   tval 0x00c02000
   cause    0x0000000f
-kernel panic at kern/trap/trap.c:245:
+kernel panic at kern/trap/trap.c:247:
     unhandled store page fault
 

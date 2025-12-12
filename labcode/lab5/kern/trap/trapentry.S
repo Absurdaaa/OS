@@ -140,6 +140,11 @@ forkrets:
 
     .global kernel_execve_ret
 kernel_execve_ret:
+    //kernel_execve_ret 用于在内核态“重建”一份新的陷阱帧并切换到它，然后按正常 trap 返回路径 __trapret 回到（新程序的）执行流：
+    //先把 a1 下移 36 个寄存器槽位（陷阱帧大小），作为新 trapframe 的位置（位于当前进程内核栈顶之下）。
+    //按序从旧 trapframe（a0 指向）逐项读取保存的寄存器值，写入新 trapframe（a1 指向），共 36 个槽位（通用寄存器 + sstatus/sepc/stval/scause）。
+    //把 sp 设为新 trapframe 起始地址 a1。
+    //跳转到 __trapret，执行标准的寄存器恢复和 sret，返回到新上下文。
     // adjust sp to beneath kstacktop of current process
     addi a1, a1, -36*REGBYTES
 

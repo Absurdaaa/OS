@@ -374,6 +374,12 @@ void exit_range(pde_t *pgdir, uintptr_t start, uintptr_t end)
  *
  * CALL GRAPH: copy_mm-->dup_mmap-->copy_range
  */
+// copy_range - 将进程 A 的内存区间 (start, end) 内容复制到进程 B
+// @to:    进程 B 的页目录地址
+// @from:  进程 A 的页目录地址
+// @share: 标记是复制还是共享。这里只使用复制方法，因此未用到该标志
+//
+// 调用关系：copy_mm --> dup_mmap --> copy_range
 int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
                bool share)
 {

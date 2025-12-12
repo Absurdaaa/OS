@@ -2,6 +2,7 @@
 #define __KERN_MM_MEMLAYOUT_H__
 
 /* This file contains the definitions for memory management in our OS. */
+// 本文件定义了操作系统内存管理相关的数据结构与常量
 
 /* *
  * Virtual memory map:                                          Permissions
@@ -41,39 +42,51 @@
  * (*) Note: The kernel ensures that "Invalid Memory" is *never* mapped.
  *     "Empty Memory" is normally unmapped, but user programs may map pages
  *     there if desired.
- *
  * */
+// 上述为虚拟内存布局示意，标注了各区间的用途与权限
 
 /* All physical memory mapped at this address */
 #define KERNBASE 0xFFFFFFFFC0200000
+// 内核虚拟起始地址，物理内存从此处映射
 #define KMEMSIZE 0x7E00000 // the maximum amount of physical memory
+// 物理内存映射的最大大小
 #define KERNTOP (KERNBASE + KMEMSIZE)
+// 内核映射的顶部虚拟地址
 
 #define PHYSICAL_MEMORY_OFFSET 0xFFFFFFFF40000000
+// 物理地址到内核虚拟地址的偏移，用于直接映射
+
 /* *
  * Virtual page table. Entry PDX[VPT] in the PD (Page Directory) contains
  * a pointer to the page directory itself, thereby turning the PD into a page
  * table, which maps all the PTEs (Page Table Entry) containing the page mappings
  * for the entire virtual address space into that 4 Meg region starting at VPT.
  * */
+// VPT 将页目录自映射成一张页表，便于遍历整个页表空间
 
 #define KSTACKPAGE 2                     // # of pages in kernel stack
 #define KSTACKSIZE (KSTACKPAGE * PGSIZE) // sizeof kernel stack
+// 内核栈的页数与总大小
 
 #define USERTOP 0x80000000
 #define USTACKTOP USERTOP
 #define USTACKPAGE 256                   // # of pages in user stack
 #define USTACKSIZE (USTACKPAGE * PGSIZE) // sizeof user stack
+// 用户栈顶与大小定义
 
 #define USERBASE 0x00200000
 #define UTEXT 0x00800000 // where user programs generally begin
+// 用户程序一般的起始虚拟地址
 #define USTAB USERBASE   // the location of the user STABS data structure
+// 用户 STABS 调试信息所在位置
 
 #define USER_ACCESS(start, end) \
     (USERBASE <= (start) && (start) < (end) && (end) <= USERTOP)
+// 检查用户态地址区间是否合法
 
 #define KERN_ACCESS(start, end) \
     (KERNBASE <= (start) && (start) < (end) && (end) <= KERNTOP)
+// 检查内核态地址区间是否合法
 
 #ifndef __ASSEMBLER__
 
@@ -84,6 +97,7 @@
 typedef uintptr_t pte_t;
 typedef uintptr_t pde_t;
 typedef pte_t swap_entry_t; // the pte can also be a swap entry
+// PTE/PDE 类型定义，swap_entry_t 复用 PTE 表示换出页
 
 /* *
  * struct Page - Page descriptor structures. Each Page describes one
@@ -98,11 +112,13 @@ struct Page
     list_entry_t page_link;     // free list link
     list_entry_t pra_page_link; // used for pra (page replace algorithm)
     uintptr_t pra_vaddr;        // used for pra (page replace algorithm)
+    // ref: 引用计数; flags/property: 页面状态与连续块信息; 链表用于空闲页和替换算法
 };
 
 /* Flags describing the status of a page frame */
 #define PG_reserved 0 // if this bit=1: the Page is reserved for kernel, cannot be used in alloc/free_pages; otherwise, this bit=0
 #define PG_property 1 // if this bit=1: the Page is the head page of a free memory block(contains some continuous_addrress pages), and can be used in alloc_pages; if this bit=0: if the Page is the the head page of a free memory block, then this Page and the memory block is alloced. Or this Page isn't the head page.
+// PG_reserved: 内核保留页; PG_property: 空闲块头页标记
 
 #define SetPageReserved(page) set_bit(PG_reserved, &((page)->flags))
 #define ClearPageReserved(page) clear_bit(PG_reserved, &((page)->flags))
@@ -110,16 +126,19 @@ struct Page
 #define SetPageProperty(page) set_bit(PG_property, &((page)->flags))
 #define ClearPageProperty(page) clear_bit(PG_property, &((page)->flags))
 #define PageProperty(page) test_bit(PG_property, &((page)->flags))
+// 页面标志的设置/清除/检查宏
 
 // convert list entry to page
 #define le2page(le, member) \
     to_struct((le), struct Page, member)
+// 将链表节点转换为 Page 指针
 
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
 typedef struct
 {
     list_entry_t free_list; // the list header
     unsigned int nr_free;   // # of free pages in this free list
+    // 记录空闲页链表及空闲页数量
 } free_area_t;
 
 #endif /* !__ASSEMBLER__ */

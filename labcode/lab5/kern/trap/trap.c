@@ -170,6 +170,8 @@ void interrupt_handler(struct trapframe *tf)
     }
 }
 void kernel_execve_ret(struct trapframe *tf, uintptr_t kstacktop);
+
+// 处理各种异常
 void exception_handler(struct trapframe *tf)
 {
     int ret;
@@ -186,9 +188,9 @@ void exception_handler(struct trapframe *tf)
         break;
     case CAUSE_BREAKPOINT:
         cprintf("Breakpoint\n");
-        if (tf->gpr.a7 == 10)
+        if (tf->gpr.a7 == 10)// 特殊标记
         {
-            tf->epc += 4;
+            tf->epc += 4;//注意返回时要执行ebreak的下一条指令
             syscall();
             kernel_execve_ret(tf, current->kstack + KSTACKSIZE);
         }
@@ -206,7 +208,7 @@ void exception_handler(struct trapframe *tf)
         cprintf("Store/AMO access fault\n");
         break;
     case CAUSE_USER_ECALL:
-        // cprintf("Environment call from U-mode\n");
+        cprintf("Environment call from U-mode\n");
         tf->epc += 4;
         syscall();
         break;

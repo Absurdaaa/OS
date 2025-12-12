@@ -31,9 +31,9 @@ DTB init completed
 
 Special kernel symbols:
   entry  0xc020004a (virtual)
-  etext  0xc020588c (virtual)
-  edata  0xc02a62e0 (virtual)
-  end    0xc02aa794 (virtual)
+  etext  0xc020589c (virtual)
+  edata  0xc02a6250 (virtual)
+  end    0xc02aa704 (virtual)
 Kernel executable memory footprint: 682KB
 memory management: default_pmm_manager
 physcial memory map:
@@ -86,6 +86,6 @@ trapframe at 0xffffffffc04b0ee0
   epc      0x00800550
   tval 0xfac00000
   cause    0x0000000d
-kernel panic at kern/trap/trap.c:237:
+kernel panic at kern/trap/trap.c:239:
     unhandled load page fault
 
