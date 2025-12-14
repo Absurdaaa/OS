@@ -265,6 +265,34 @@ grade:
 	$(V)$(MAKE) $(MAKEOPTS) clean
 	$(V)$(SH) tools/grade.sh
 
+test-dirtycow: $(UCOREIMG)
+	@echo "========================================"
+	@echo "  Running Dirty COW Vulnerability Test"
+	@echo "========================================"
+	@echo "Type 'dirtycow_test' at the shell prompt"
+	@echo "Press Ctrl+A then X to exit QEMU"
+	@echo ""
+	$(V)$(QEMU) \
+		-machine virt \
+		-nographic \
+		-bios default \
+		-device loader,file=$(UCOREIMG),addr=0x80200000
+
+run-dirtycow: touch
+	@echo "========================================"
+	@echo "  Building and Running Dirty COW Test"
+	@echo "========================================"
+	$(V)$(MAKE) $(MAKEOPTS) "DEFS+=-DTEST=dirtycow_test -DTESTSTART=_binary_obj___user_dirtycow_test_out_start -DTESTSIZE=_binary_obj___user_dirtycow_test_out_size"
+	@echo ""
+	@echo "Starting uCore with dirtycow_test..."
+	@echo "Press Ctrl+A then X to exit QEMU"
+	@echo ""
+	$(V)$(QEMU) \
+		-machine virt \
+		-nographic \
+		-bios default \
+		-device loader,file=$(UCOREIMG),addr=0x80200000
+
 touch:
 	$(V)$(foreach f,$(TOUCH_FILES),$(TOUCH) $(f))
 
