@@ -118,9 +118,31 @@
   #3  tb_htable_lookup (cpu=..., pc=2147483648, ...)
   ```
 
-
   终端3：`make gdb` 连接 ucore，运行到该访存指令。
   
+-**单步调试页表翻译的部分，解释一下关键的操作流程**
+
+  ## 页表翻译单步调试指引（SV39 例）
+
+### 1. 关键入口与循环在做什么
+- `riscv_cpu_tlb_fill`：TLB miss 入口，决定是否走页表，并调用 `get_physical_address`。
+- `get_physical_address`（SV39）：三层循环访问页表，每层取 9 位索引，读 PTE，检查有效/权限，若命中叶子则返回物理页帧并回填 TLB。
+- 典型核心逻辑（伪码）：
+  ````c
+  // ...existing code...
+  // VA: 39-bit，按 [VPN2][VPN1][VPN0][page_off] 划分
+  for (level = 2; level >= 0; level--) {
+      idx = (va >> (12 + 9 * level)) & 0x1ff;   // 取该级索引
+      pte_addr = pt_base + idx * 8;             // 8 字节一项
+      pte = ldq_phys(pte_addr);                 // 从“当前页表”取出 PTE
+      if (!PTE_V || (!PTE_R && PTE_W)) trap;    // 有效性检查
+      if (PTE_R || PTE_X) {                     // 叶子
+          ppn = combine_ppn(pte, level, va);    // 拼物理页帧 + 页内偏移
+          return pa;
+      }
+      pt_base = (pte.ppn << 12);                // 向下一层页表
+  }
+  ````
 
 # ai交互心得
 
