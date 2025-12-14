@@ -49,18 +49,6 @@ check_vmm() succeeded.
 ++ setup timer interrupts
 kernel_execve: pid = 2, name = "forktest".
 Breakpoint
-I am child 31
-I am child 30
-I am child 29
-I am child 28
-I am child 27
-I am child 26
-I am child 25
-I am child 24
-I am child 23
-I am child 22
-I am child 21
-I am child 20
 I am child 19
 I am child 18
 I am child 17
@@ -80,7 +68,18 @@ I am child 3
 I am child 2
 I am child 1
 I am child 0
-I am child 16
+I am child 25
+I am child 24
+I am child 23
+I am child 22
+I am child 21
+I am child 20
+I am child 31
+I am child 30
+I am child 29
+I am child 28
+I am child 27
+I am child 26
 forktest pass.
 all user-mode processes have quit.
 init check memory pass.
