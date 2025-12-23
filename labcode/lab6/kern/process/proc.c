@@ -443,18 +443,20 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
      *    update step 1: set child proc's parent to current process, make sure current process's wait_state is 0
      *    update step 5: insert proc_struct into hash_list && proc_list, set the relation links of process
      */
+
     proc = alloc_proc();
-    if (proc == NULL)
+
+    if(proc == NULL)
     {
         goto fork_out;
     }
 
-    if (setup_kstack(proc) != 0)
+    if(setup_kstack(proc) < 0)
     {
         goto bad_fork_cleanup_proc;
     }
 
-    if (copy_mm(clone_flags, proc) != 0)
+    if(copy_mm(clone_flags, proc) < 0)
     {
         goto bad_fork_cleanup_kstack;
     }
@@ -464,11 +466,13 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     bool intr_flag;
     local_intr_save(intr_flag);
     {
+        // LAB5: set parent relation and reset parent's wait state
         proc->parent = current;
         current->wait_state = 0;
 
         proc->pid = get_pid();
         hash_proc(proc);
+        // Insert into global lists and parent/child links
         set_links(proc);
     }
     local_intr_restore(intr_flag);
