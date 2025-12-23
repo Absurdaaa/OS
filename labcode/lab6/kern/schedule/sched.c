@@ -52,7 +52,16 @@ void sched_init(void)
 {
     list_init(&timer_list);
 
+    // Select scheduler via compile-time switches, default to stride
+#ifdef USE_SCHED_FIFO
+    sched_class = &fifo_sched_class;
+#elif defined(USE_SCHED_SJF)
+    sched_class = &sjf_sched_class;
+#elif defined(USE_SCHED_RR)
+    sched_class = &default_sched_class;
+#else
     sched_class = &stride_sched_class;
+#endif
 
     rq = &__rq;
     rq->max_time_slice = MAX_TIME_SLICE;

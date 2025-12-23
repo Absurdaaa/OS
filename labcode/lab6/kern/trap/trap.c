@@ -23,10 +23,6 @@ int print_num = 0;
 static void print_ticks()
 {
     cprintf("%d ticks\n", TICK_NUM);
-#ifdef DEBUG_GRADE
-    cprintf("End of Test.\n");
-    panic("EOT: kernel seems ok.");
-#endif
 }
 
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
@@ -131,19 +127,10 @@ void interrupt_handler(struct trapframe *tf)
          */
 
         clock_set_next_event();
-        if (++ticks % TICK_NUM == 0)
-        {
-            print_num++;
-            print_ticks();
-        }
+        ticks++;
         if (current != NULL)
         {
             sched_class_proc_tick(current);
-        }
-        if (print_num == 10)
-        {
-            cprintf("Calling SBI shutdown...\n");
-            sbi_shutdown();
         }
 
         break;

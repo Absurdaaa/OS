@@ -162,6 +162,8 @@ run_qemu() {
         # on OS X, exiting gdb doesn't always exit qemu
         kill $pid > /dev/null 2>&1
     fi
+    # wait for qemu to finish to ensure full log is written
+    wait $pid 2>/dev/null
 }
 
 build_run() {
@@ -328,7 +330,8 @@ swapimg=$(make_print swapimg)
 qemuopts="-machine virt -nographic -bios default -device loader,file=bin/ucore.img,addr=0x80200000"
 
 ## set break-function, default is readline
-brkfun=readline
+# Disable gdb break in restricted environment
+brkfun=
 
 default_check() {
     pts=40
@@ -348,7 +351,7 @@ default_check() {
 
 ## check now!!
 run_test -prog 'priority'      -check default_check             \
-        'sched class: RR_scheduler'                         \
+        'sched class: stride_scheduler'                         \
         'kernel_execve: pid = 2, name = "priority".'            \
         'main: fork ok,now need to wait pids.'                  \
         'set priority to 5'                                     \
