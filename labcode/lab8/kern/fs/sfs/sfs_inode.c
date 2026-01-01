@@ -86,6 +86,7 @@ sfs_block_inuse(struct sfs_fs *sfs, uint32_t ino) {
 /*
  * sfs_block_alloc -  check and get a free disk block
  */
+// 从文件系统的空闲块位图中挑出一个原本空闲的块，标记为已占用并初始化为可用状态
 static int
 sfs_block_alloc(struct sfs_fs *sfs, uint32_t *ino_store) {
     int ret;
@@ -189,21 +190,25 @@ failed_unlock:
 }
 
 /*
- * sfs_bmap_get_sub_nolock - according entry pointer entp and index, find the index of indrect disk block
- *                           return the index of indrect disk block to ino_store. no lock protect
- * @sfs:      sfs file system
- * @entp:     the pointer of index of entry disk block
- * @index:    the index of block in indrect block
- * @create:   BOOL, if the block isn't allocated, if create = 1 the alloc a block,  otherwise just do nothing
- * @ino_store: 0 OR the index of already inused block or new allocated block.
+ * sfs_bmap_get_sub_nolock - 根据 entry 指针 entp 和索引 index，
+ *                           查找间接块（indirect block）中的磁盘块索引
+ *                           将间接块中的磁盘块索引返回到 ino_store 中，不加锁
+ * @sfs:        sfs 文件系统
+ * @entp:       entry 磁盘块索引的指针（指向间接块）
+ * @index:      在间接块中的块索引
+ * @create:     布尔值，如果该块尚未分配：
+ *              若 create = 1，则分配一个新块；
+ *              否则什么也不做
+ * @ino_store:  0，或已经在使用的块索引，或新分配的块索引
  */
 static int
 sfs_bmap_get_sub_nolock(struct sfs_fs *sfs, uint32_t *entp, uint32_t index, bool create, uint32_t *ino_store) {
     assert(index < SFS_BLK_NENTRY);
     int ret;
     uint32_t ent, ino = 0;
-    off_t offset = index * sizeof(uint32_t);  // the offset of entry in entry block
-	// if entry block is existd, read the content of entry block into  sfs->sfs_buffer
+    off_t offset = index * sizeof(uint32_t);  // 该 entry 在 entry 块中的偏移量
+
+    // 如果 entry 块已经存在，则将 entry 块的内容读入 sfs->sfs_buffer
     if ((ent = *entp) != 0) {
         if ((ret = sfs_rbuf(sfs, &ino, sizeof(uint32_t), ent, offset)) != 0) {
             return ret;
@@ -216,20 +221,23 @@ sfs_bmap_get_sub_nolock(struct sfs_fs *sfs, uint32_t *entp, uint32_t index, bool
         if (!create) {
             goto out;
         }
-		//if entry block isn't existd, allocated a entry block (for indrect block)
+        // 如果 entry 块不存在，则分配一个 entry 块（用于间接块）
         if ((ret = sfs_block_alloc(sfs, &ent)) != 0) {
             return ret;
         }
     }
     
+    // 数据块分配失败
     if ((ret = sfs_block_alloc(sfs, &ino)) != 0) {
         goto failed_cleanup;
     }
+    // 数据块分配成功，但是把块号写入间接块失败
     if ((ret = sfs_wbuf(sfs, &ino, sizeof(uint32_t), ent, offset)) != 0) {
         sfs_block_free(sfs, ino);
         goto failed_cleanup;
     }
 
+// 只会在一种情况下更新，原来没有间接块，现在create=true分配了一个新的间接块，把*entp改成新的ent，让上层能写回din->indirect
 out:
     if (ent != *entp) {
         *entp = ent;
@@ -245,22 +253,25 @@ failed_cleanup:
 }
 
 /*
- * sfs_bmap_get_nolock - according sfs_inode and index of block, find the NO. of disk block
- *                       no lock protect
- * @sfs:      sfs file system
- * @sin:      sfs inode in memory
- * @index:    the index of block in inode
- * @create:   BOOL, if the block isn't allocated, if create = 1 the alloc a block,  otherwise just do nothing
- * @ino_store: 0 OR the index of already inused block or new allocated block.
+ * sfs_bmap_get_nolock - 根据 sfs inode 和块索引，查找对应的磁盘块号
+ *                       不进行加锁保护
+ * @sfs:        sfs 文件系统
+ * @sin:        内存中的 sfs inode
+ * @index:      inode 中的块索引
+ * @create:     布尔值，如果该块尚未分配：
+ *              若 create = 1，则分配一个新块；
+ *              否则什么也不做
+ * @ino_store:  0，或已经在使用的块索引，或新分配的块索引
  */
 static int
 sfs_bmap_get_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index, bool create, uint32_t *ino_store) {
     struct sfs_disk_inode *din = sin->din;
     int ret;
     uint32_t ent, ino;
-	// the index of disk block is in the fist SFS_NDIRECT  direct blocks
+
+    // 磁盘块索引位于前 SFS_NDIRECT 个直接块中
     if (index < SFS_NDIRECT) {
-        if ((ino = din->direct[index]) == 0 && create) {
+        if ((ino = din->direct[index]) == 0 && create) { // 先看direct[index]中有没有对应的块号，没有依据create决定分配
             if ((ret = sfs_block_alloc(sfs, &ino)) != 0) {
                 return ret;
             }
@@ -269,13 +280,15 @@ sfs_bmap_get_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index, b
         }
         goto out;
     }
-    // the index of disk block is in the indirect blocks.
+
+    // 磁盘块索引位于间接块中
     index -= SFS_NDIRECT;
     if (index < SFS_BLK_NENTRY) {
         ent = din->indirect;
         if ((ret = sfs_bmap_get_sub_nolock(sfs, &ent, index, create, &ino)) != 0) {
             return ret;
         }
+        // sub分配了新的间接块，需要写回inode（只有当 din->indirect 原本是 0，并且 create==true 时，sub 才会把 ent 从 0 改成新分配的间接块号。）
         if (ent != din->indirect) {
             assert(din->indirect == 0);
             din->indirect = ent;
@@ -286,13 +299,14 @@ sfs_bmap_get_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index, b
 		panic ("sfs_bmap_get_nolock - index out of range");
 	}
 out:
+    // 把找到/新建的数据块号返回 
     assert(ino == 0 || sfs_block_inuse(sfs, ino));
     *ino_store = ino;
     return 0;
 }
 
 /*
- * sfs_bmap_free_sub_nolock - set the entry item to 0 (free) in the indirect block
+ * sfs_bmap_free_sub_nolock - 将间接块中的某个 entry 项置为 0（释放）
  */
 static int
 sfs_bmap_free_sub_nolock(struct sfs_fs *sfs, uint32_t ent, uint32_t index) {
@@ -313,7 +327,8 @@ sfs_bmap_free_sub_nolock(struct sfs_fs *sfs, uint32_t ent, uint32_t index) {
 }
 
 /*
- * sfs_bmap_free_nolock - free a block with logical index in inode and reset the inode's fields
+ * sfs_bmap_free_nolock - 释放 inode 中给定逻辑索引对应的磁盘块，
+ *                       并重置 inode 中相关字段
  */
 static int
 sfs_bmap_free_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index) {
@@ -344,23 +359,26 @@ sfs_bmap_free_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index) 
 }
 
 /*
- * sfs_bmap_load_nolock - according to the DIR's inode and the logical index of block in inode, find the NO. of disk block.
- * @sfs:      sfs file system
- * @sin:      sfs inode in memory
- * @index:    the logical index of disk block in inode
- * @ino_store:the NO. of disk block
+ * sfs_bmap_load_nolock - 根据目录（DIR）的 inode 以及 inode 中的逻辑块索引，
+ *                        查找对应的磁盘块号
+ * @sfs:        sfs 文件系统
+ * @sin:        内存中的 sfs inode
+ * @index:      inode 中磁盘块的逻辑索引
+ * @ino_store:  磁盘块号
  */
 static int
 sfs_bmap_load_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index, uint32_t *ino_store) {
     struct sfs_disk_inode *din = sin->din;
-    assert(index <= din->blocks);
+    assert(index <= din->blocks); // 不能跳着访问
     int ret;
     uint32_t ino;
-    bool create = (index == din->blocks);
+    bool create = (index == din->blocks); // 如果正在访问文件的末尾，需要分配新块以及扩展文件
     if ((ret = sfs_bmap_get_nolock(sfs, sin, index, create, &ino)) != 0) {
         return ret;
     }
+    // 确保拿到的块号在使用中
     assert(sfs_block_inuse(sfs, ino));
+    // 更新块数
     if (create) {
         din->blocks ++;
     }
@@ -371,7 +389,7 @@ sfs_bmap_load_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index, 
 }
 
 /*
- * sfs_bmap_truncate_nolock - free the disk block at the end of file
+ * sfs_bmap_truncate_nolock - 释放文件末尾的一个磁盘块
  */
 static int
 sfs_bmap_truncate_nolock(struct sfs_fs *sfs, struct sfs_inode *sin) {
@@ -387,11 +405,11 @@ sfs_bmap_truncate_nolock(struct sfs_fs *sfs, struct sfs_inode *sin) {
 }
 
 /*
- * sfs_dirent_read_nolock - read the file entry from disk block which contains this entry
- * @sfs:      sfs file system
- * @sin:      sfs inode in memory
- * @slot:     the index of file entry
- * @entry:    file entry
+ * sfs_dirent_read_nolock - 从包含该目录项的磁盘块中读取文件目录项
+ * @sfs:        sfs 文件系统
+ * @sin:        内存中的 sfs inode
+ * @slot:       文件目录项的索引
+ * @entry:      文件目录项
  */
 static int
 sfs_dirent_read_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, int slot, struct sfs_disk_entry *entry) {
@@ -399,11 +417,14 @@ sfs_dirent_read_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, int slot, stru
     int ret;
     uint32_t ino;
 	// according to the DIR's inode and the slot of file entry, find the index of disk block which contains this file entry
+    // 根据目录的 inode 以及目录项的 slot，
+    // 找到包含该目录项的磁盘块号
     if ((ret = sfs_bmap_load_nolock(sfs, sin, slot, &ino)) != 0) {
         return ret;
     }
     assert(sfs_block_inuse(sfs, ino));
 	// read the content of file entry in the disk block 
+    // 从该磁盘块中读取目录项的内容
     if ((ret = sfs_rbuf(sfs, entry, sizeof(struct sfs_disk_entry), ino, 0)) != 0) {
         return ret;
     }
@@ -428,14 +449,16 @@ sfs_dirent_read_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, int slot, stru
     } while (0)
 
 /*
- * sfs_dirent_search_nolock - read every file entry in the DIR, compare file name with each entry->name
- *                            If equal, then return slot and NO. of disk of this file's inode
- * @sfs:        sfs file system
- * @sin:        sfs inode in memory
- * @name:       the filename
- * @ino_store:  NO. of disk of this file (with the filename)'s inode
- * @slot:       logical index of file entry (NOTICE: each file entry ocupied one  disk block)
- * @empty_slot: the empty logical index of file entry.
+ * sfs_dirent_search_nolock - 读取目录（DIR）中的所有文件目录项，
+ *                            将给定的文件名与每个 entry->name 进行比较；
+ *                            若相等，则返回该目录项的 slot 以及该文件 inode 的磁盘号
+ * @sfs:         sfs 文件系统
+ * @sin:         内存中的 sfs inode
+ * @name:        文件名
+ * @ino_store:   具有该文件名的文件 inode 的磁盘号
+ * @slot:        文件目录项的逻辑索引
+ *               （注意：每个文件目录项占用一个磁盘块）
+ * @empty_slot:  空闲的文件目录项逻辑索引
  */
 static int
 sfs_dirent_search_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, const char *name, uint32_t *ino_store, int *slot, int *empty_slot) {
@@ -541,13 +564,15 @@ sfs_close(struct inode *node) {
 }
 
 /*  
- * sfs_io_nolock - Rd/Wr a file contentfrom offset position to offset+ length  disk blocks<-->buffer (in memroy)
- * @sfs:      sfs file system
- * @sin:      sfs inode in memory
- * @buf:      the buffer Rd/Wr
- * @offset:   the offset of file
- * @alenp:    the length need to read (is a pointer). and will RETURN the really Rd/Wr lenght
- * @write:    BOOL, 0 read, 1 write
+ * sfs_io_nolock - 从 offset 位置开始，在磁盘块与内存缓冲区之间
+ *                 读/写 文件内容，范围为 [offset, offset + length)
+ * @sfs:       sfs 文件系统
+ * @sin:       内存中的 sfs inode
+ * @buf:       用于读/写的缓冲区
+ * @offset:    文件偏移量
+ * @alenp:     需要读/写的长度（指针），
+ *             并在返回时保存实际读/写的长度
+ * @write:     布尔值，0 表示读，1 表示写
  */
 static int
 sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset, size_t *alenp, bool write) {
@@ -562,10 +587,12 @@ sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset
     if (offset == endpos) {
         return 0;
     }
+    // 截断到max_file_size
     if (endpos > SFS_MAX_FILE_SIZE) {
         endpos = SFS_MAX_FILE_SIZE;
     }
     if (!write) {
+        // 起始点大于文件开始
         if (offset >= din->size) {
             return 0;
         }
@@ -576,6 +603,7 @@ sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset
 
     int (*sfs_buf_op)(struct sfs_fs *sfs, void *buf, size_t len, uint32_t blkno, off_t offset);
     int (*sfs_block_op)(struct sfs_fs *sfs, void *buf, uint32_t blkno, uint32_t nblks);
+    // 通过函数指针统一处理读写
     if (write) {
         sfs_buf_op = sfs_wbuf, sfs_block_op = sfs_wblock;
     }
@@ -586,8 +614,8 @@ sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset
     int ret = 0;
     size_t size, alen = 0;
     uint32_t ino;
-    uint32_t blkno = offset / SFS_BLKSIZE;          // The NO. of Rd/Wr begin block
-    uint32_t nblks = endpos / SFS_BLKSIZE - blkno;  // The size of Rd/Wr blocks
+    uint32_t blkno = offset / SFS_BLKSIZE;          // The NO. of Rd/Wr begin block，起始块逻辑号
+    uint32_t nblks = endpos / SFS_BLKSIZE - blkno;  // The size of Rd/Wr blocks，中间完整跨过的块数
 
   //LAB8:EXERCISE1 YOUR CODE HINT: call sfs_bmap_load_nolock, sfs_rbuf, sfs_rblock,etc. read different kind of blocks in file
 	/*
@@ -599,11 +627,77 @@ sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset
      * (3) If end position isn't aligned with the last block, Rd/Wr some content from begin to the (endpos % SFS_BLKSIZE) of the last block
 	 *       NOTICE: useful function: sfs_bmap_load_nolock, sfs_buf_op	
 	*/
+    // LAB8：练习 1 代码提示：
+    // 调用 sfs_bmap_load_nolock、sfs_rbuf、sfs_rblock 等函数，
+    // 对文件中不同类型的块进行读取
+    /*
+     * (1) 如果 offset 没有与第一个块对齐，
+     *     则从 offset 开始读/写，到第一个块结束为止
+     *     注意：可用函数：sfs_bmap_load_nolock、sfs_buf_op
+     *           读/写长度 =
+     *           (nblks != 0) ? (SFS_BLKSIZE - blkoff) : (endpos - offset)
+     *
+     * (2) 读/写中间对齐的整块
+     *     注意：可用函数：sfs_bmap_load_nolock、sfs_block_op
+     *
+     * (3) 如果结束位置没有与最后一个块对齐，
+     *     则从最后一个块的起始处读/写，
+     *     到 (endpos % SFS_BLKSIZE) 为止
+     *     注意：可用函数：sfs_bmap_load_nolock、sfs_buf_op
+     */
 
-    
+    // (1) 处理第一个不对齐的块
+    blkoff = offset % SFS_BLKSIZE; // 起始块内偏移
+    // 首块不对齐，说明offset落在块中间
+    if (blkoff != 0) {
+        size = (nblks != 0) ? (SFS_BLKSIZE - blkoff) : (endpos - offset); // 如果nblks!=0，说明后面还会跨整块
+        if ((ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino)) != 0) {
+            goto out;
+        }
+        // 在首块内进行读/写
+        if ((ret = sfs_buf_op(sfs, buf, size, ino, blkoff)) != 0) {
+            goto out;
+        }
+        alen += size; // 已完成字节数
+        buf += size; // buf指针后移，指向下一个要处理的位置
+        blkno++; // 逻辑块号移动到下一个块
+        if (nblks > 0) {
+            nblks--;
+        }
+    }
+
+    // (2) 处理中间对齐的整块
+    while (nblks > 0) {
+        // 拿不到物理块号
+        if ((ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino)) != 0) {
+            goto out;
+        }
+        // 虽然有物理块号，但是读写失败
+        if ((ret = sfs_block_op(sfs, buf, ino, 1)) != 0) {
+            goto out;
+        }
+        alen += SFS_BLKSIZE;
+        buf += SFS_BLKSIZE;
+        blkno++;
+        nblks--;
+    }
+
+    // (3) 处理最后一个不对齐的块
+    // 只有当还有剩余数据需要读取时才处理
+    if (alen < endpos - offset) {
+        size = endpos - offset - alen;
+        if ((ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino)) != 0) {
+            goto out;
+        }
+        if ((ret = sfs_buf_op(sfs, buf, size, ino, 0)) != 0) {
+            goto out;
+        }
+        alen += size;
+    }
 
 out:
-    *alenp = alen;
+    *alenp = alen; // 把成功读/写的字节数返回
+    // 如果是写并且写到了文件末尾之后，更新din->size并且标记为inode为dirty
     if (offset + alen > sin->din->size) {
         sin->din->size = offset + alen;
         sin->dirty = 1;

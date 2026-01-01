@@ -149,11 +149,15 @@ alloc_proc(void)
         proc->rq = NULL;              // 初始化运行队列为空
         list_init(&(proc->run_link)); // 初始化运行队列的指针
         proc->time_slice = 0;
-        proc->lab6_run_pool.left = proc->lab6_run_pool.right = proc->lab6_run_pool.parent = NULL;
+        // proc->lab6_run_pool.left = proc->lab6_run_pool.right = proc->lab6_run_pool.parent = NULL;
+        // proc->lab6_stride = 0;
+        // proc->lab6_priority = 0;
+        skew_heap_init(&(proc->lab6_run_pool));
         proc->lab6_stride = 0;
-        proc->lab6_priority = 0;
+        proc->lab6_priority = 1;
+        // 加上对filesp初始化
+        proc->filesp = NULL;
 
-        
     }
     return proc;
 }
@@ -272,7 +276,40 @@ void proc_run(struct proc_struct *proc)
        *        MACROs or Functions:
        *       flush_tlb():          flush the tlb        
        */
-    
+    // 检查要切换的进程是否与当前正在运行的进程相同，如果相同则不需要切换。
+    if (proc != current)
+    {
+        // LAB4:EXERCISE3 2312966
+        /*
+        * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
+        * MACROs or Functions:
+        *   local_intr_save():        Disable interrupts
+        *   local_intr_restore():     Enable Interrupts
+        *   lsatp():                   Modify the value of satp register
+        *   switch_to():              Context switching between two processes
+        * 一些有用的宏、函数和常量定义，可在下面的实现中使用。
+        * local_intr_save()：禁用中断
+        * local_intr_restore()：启用中断
+        * lsatp()：修改 satp 寄存器的值
+        * switch_to()：在两个进程之间进行上下文切换
+        */
+        
+        // 1. 禁用中断，以防止在切换过程中被中断打断
+        bool intr_flag;
+        local_intr_save(intr_flag);
+        {
+            // 2.切换当前进程为要运行的进程。
+            struct proc_struct *prev = current;
+            current = proc;
+            // 3.切换页表，以便使用新进程的地址空间。
+            lsatp(proc->pgdir);
+            flush_tlb();
+            // 4.切换上下文，从当前进程切换到要运行的进程
+            switch_to(&(prev->context), &(proc->context));
+        }
+        // 5.允许中断
+        local_intr_restore(intr_flag);
+    }
 }
 
 // forkret -- the first kernel entry point of a new thread/process
@@ -538,12 +575,46 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
      *    update step 1: set child proc's parent to current process, make sure current process's wait_state is 0
      *    update step 5: insert proc_struct into hash_list && proc_list, set the relation links of process
      */
-    
+
+    proc = alloc_proc();
+    if (proc == NULL)
+    {
+        goto fork_out;
+    }
+
+    if (setup_kstack(proc) < 0)
+    {
+        goto bad_fork_cleanup_proc;
+    }
+
     if (copy_files(clone_flags, proc) != 0)
     { // for LAB8
         goto bad_fork_cleanup_kstack;
     }
-    
+
+    if (copy_mm(clone_flags, proc) < 0)
+    {
+        goto bad_fork_cleanup_fs;
+    }
+
+    copy_thread(proc, stack, tf);
+
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        proc->parent = current;
+        current->wait_state = 0;
+
+        proc->pid = get_pid();
+        hash_proc(proc);
+        set_links(proc);
+    }
+    local_intr_restore(intr_flag);
+
+    wakeup_proc(proc);
+
+    ret = proc->pid;
+
 fork_out:
     return ret;
 
@@ -625,10 +696,12 @@ static int
 load_icode_read(int fd, void *buf, size_t len, off_t offset)
 {
     int ret;
+    // 移动文件指针到指定偏移
     if ((ret = sysfile_seek(fd, offset, LSEEK_SET)) != 0)
     {
         return ret;
     }
+    // 从当前位置读取len字节
     if ((ret = sysfile_read(fd, buf, len)) != len)
     {
         return (ret < 0) ? ret : -1;
@@ -666,7 +739,264 @@ load_icode(int fd, int argc, char **kargv)
      * (7) setup trapframe for user environment
      * (8) if up steps failed, you should cleanup the env.
      */
-    
+    /*
+     * LAB8：练习 2
+     * 提示：如何通过文件描述符 fd 将程序文件加载到进程的内存中？
+     *       如何设置 argc / argv？
+     *
+     * 可用的宏或函数：
+     *  mm_create        - 创建一个新的 mm（内存管理结构）
+     *  setup_pgdir      - 为 mm 建立页目录（页表根）
+     *  load_icode_read  - 从程序文件中读取原始数据
+     *  mm_map           - 建立新的 VMA（虚拟内存区域）
+     *  pgdir_alloc_page - 为 TEXT / DATA / BSS / 栈 分配物理页
+     *  lsatp            - 更新页目录地址寄存器（相当于 CR3）
+     */
+
+    // 你可以参考你已经完成的 LAB5 中的代码来完成本函数
+
+    /*
+     * (1) 为当前进程创建一个新的 mm
+     * (2) 创建新的页目录（PDT），并令 mm->pgdir 指向页目录的内核虚拟地址
+     * (3) 将二进制文件中的 TEXT / DATA / BSS 段复制到进程的地址空间中
+     *     (3.1) 从文件中读取 ELF 头（elfhdr）
+     *     (3.2) 根据 ELF 头信息读取并解析程序头（proghdr）
+     *     (3.3) 调用 mm_map 为 TEXT / DATA 建立对应的 VMA
+     *     (3.4) 调用 pgdir_alloc_page 为 TEXT / DATA 分配物理页，
+     *           并将文件中的内容拷贝到新分配的页中
+     *     (3.5) 调用 pgdir_alloc_page 为 BSS 分配物理页，
+     *           并将这些页清零（memset 0）
+     * (4) 调用 mm_map 建立用户栈，并将参数放入用户栈中
+     * (5) 设置当前进程的 mm 和 cr3，并使用 lsatp 切换页表
+     * (6) 在用户栈中设置 uargc 和 uargv
+     * (7) 设置用户态执行环境的 trapframe
+     * (8) 如果上述步骤中任何一步失败，需要清理已分配的资源
+     */
+
+    if (current->mm != NULL)
+    {
+        panic("load_icode: current->mm must be empty.\n");
+    }
+
+    int ret = -E_NO_MEM;
+    struct mm_struct *mm;
+
+    // (1) 为当前进程创建一个新的 mm
+    if ((mm = mm_create()) == NULL)
+    {
+        goto bad_mm;
+    }
+
+    // (2) 创建新的页目录，并让 mm->pgdir 指向页目录的内核虚拟地址
+    if (setup_pgdir(mm) != 0)
+    {
+        goto bad_pgdir_cleanup_mm;
+    }
+
+    // (3) 将 ELF 中的 TEXT / DATA / BSS 段加载到进程内存空间
+    struct Page *page = NULL;
+
+    // (3.1) 从文件中读取 ELF 头
+    struct elfhdr elf_buf;
+    struct elfhdr *elf = &elf_buf;
+    if ((ret = load_icode_read(fd, elf, sizeof(struct elfhdr), 0)) != 0)
+    {
+        goto bad_elf_cleanup_pgdir;
+    }
+
+    // (3.2) 检查 ELF 魔数，判断是否为合法的 ELF 文件
+    if (elf->e_magic != ELF_MAGIC)
+    {
+        ret = -E_INVAL_ELF;
+        goto bad_elf_cleanup_pgdir;
+    }
+
+    uint32_t vm_flags, perm;
+    struct proghdr ph_buf;
+    struct proghdr *ph = &ph_buf;
+    uint32_t i;
+
+    for (i = 0; i < elf->e_phnum; i++)
+    {
+        // (3.2) 读取并解析第 i 个程序头（Program Header）
+        off_t ph_offset = elf->e_phoff + sizeof(struct proghdr) * i; // 计算偏移
+        // 读出程序头
+        if ((ret = load_icode_read(fd, ph, sizeof(struct proghdr), ph_offset)) != 0)
+        {
+            goto bad_cleanup_mmap;
+        }
+
+        // 只处理可加载段（PT_LOAD）
+        if (ph->p_type != ELF_PT_LOAD)
+        {
+            continue;
+        }
+        // 文件中段大小不能大于内存中段大小
+        if (ph->p_filesz > ph->p_memsz)
+        {
+            ret = -E_INVAL_ELF;
+            goto bad_cleanup_mmap;
+        }
+        if (ph->p_filesz == 0)
+        {
+            // 纯 BSS 段（文件中无内容），虽然不用读文件，但是不能跳过内存分配
+            // continue;
+        }
+
+        // (3.3) 调用 mm_map，为该段建立对应的虚拟内存区域（VMA）
+        vm_flags = 0, perm = PTE_U | PTE_V;
+        if (ph->p_flags & ELF_PF_X) // 可执行
+            vm_flags |= VM_EXEC;
+        if (ph->p_flags & ELF_PF_W) // 可写
+            vm_flags |= VM_WRITE;
+        if (ph->p_flags & ELF_PF_R) // 可读
+            vm_flags |= VM_READ;
+        // 根据 VMA 权限设置页表项权限
+        if (vm_flags & VM_READ)
+            perm |= PTE_R;
+        if (vm_flags & VM_WRITE) // 只要可写，就顺带给可读
+            perm |= (PTE_W | PTE_R);
+        if (vm_flags & VM_EXEC)
+            perm |= PTE_X;
+        // 调用mm_map建立VMA，[ph->p_va, ph->p_va + ph->p_memsz) 这段用户虚拟地址属于本进程，权限是 vm_flags。
+        if ((ret = mm_map(mm, ph->p_va, ph->p_memsz, vm_flags, NULL)) != 0)
+        {
+            goto bad_cleanup_mmap;
+        }
+
+        // (3.4) 为 TEXT / DATA 段分配物理页，并将文件内容拷贝到内存中
+        off_t offset = ph->p_offset; // 该段在elf文件中的起始位置
+        size_t off, size;
+        uintptr_t start = ph->p_va, end, la = ROUNDDOWN(start, PGSIZE); // la代表start页所在页的起始地址
+
+        ret = -E_NO_MEM;
+
+        end = ph->p_va + ph->p_filesz;
+        while (start < end)
+        {
+            // 为当前虚拟地址分配一页物理内存
+            if ((page = pgdir_alloc_page(mm->pgdir, la, perm)) == NULL)
+            {
+                goto bad_cleanup_mmap;
+            }
+            off = start - la, size = PGSIZE - off, la += PGSIZE;
+            if (end < la) // 最后一页，写不满整页
+            {
+                size -= la - end;
+            }
+            // 从文件中读取数据到该物理页
+            if ((ret = load_icode_read(fd, page2kva(page) + off, size, offset)) != 0)
+            {
+                goto bad_cleanup_mmap;
+            }
+            start += size, offset += size;
+        }
+
+        // (3.5) 为 BSS 段分配物理页，并清零
+        end = ph->p_va + ph->p_memsz;
+        // 处理同一页内 filesz 之后的 BSS 部分
+        if (start < la)
+        {
+            if (start == end)
+            {
+                continue;
+            }
+            off = start + PGSIZE - la, size = PGSIZE - off;
+            if (end < la)
+            {
+                size -= la - end;
+            }
+            memset(page2kva(page) + off, 0, size);
+            start += size;
+            assert((end < la && start == end) || (end >= la && start == la));
+        }
+        // 处理剩余完整 BSS 页
+        while (start < end)
+        {
+            if ((page = pgdir_alloc_page(mm->pgdir, la, perm)) == NULL)
+            {
+                goto bad_cleanup_mmap;
+            }
+            // 计算清零的字节数
+            off = start - la, size = PGSIZE - off, la += PGSIZE;
+            if (end < la)
+            {
+                size -= la - end;
+            }
+            memset(page2kva(page) + off, 0, size);
+            start += size;
+        }
+    }
+    // 关闭程序文件
+    sysfile_close(fd);
+
+    // (4) 建立用户栈的虚拟内存区域
+    vm_flags = VM_READ | VM_WRITE | VM_STACK;
+    // 建立用户栈VMA
+    if ((ret = mm_map(mm, USTACKTOP - USTACKSIZE, USTACKSIZE, vm_flags, NULL)) != 0)
+    {
+        goto bad_cleanup_mmap;
+    }
+    // 为用户栈预先分配若干页
+    assert(pgdir_alloc_page(mm->pgdir, USTACKTOP - PGSIZE, PTE_USER) != NULL);
+    assert(pgdir_alloc_page(mm->pgdir, USTACKTOP - 2 * PGSIZE, PTE_USER) != NULL);
+    assert(pgdir_alloc_page(mm->pgdir, USTACKTOP - 3 * PGSIZE, PTE_USER) != NULL);
+    assert(pgdir_alloc_page(mm->pgdir, USTACKTOP - 4 * PGSIZE, PTE_USER) != NULL);
+
+    // (5) 设置当前进程的 mm 和页表基址，并切换到新页表
+    mm_count_inc(mm);
+    current->mm = mm;
+    current->pgdir = PADDR(mm->pgdir);
+    lsatp(PADDR(mm->pgdir));
+
+    // (6) 在用户栈中设置 argc 和 argv
+    uint32_t argv_size = 0;
+    // 计算argv所需字节数
+    for (i = 0; i < argc; i++)
+    {
+        argv_size += strnlen(kargv[i], EXEC_MAX_ARG_LEN + 1) + 1;
+    }
+
+    // 在用户栈顶下面留出字符串区，并做 long 对齐
+    uintptr_t stacktop = USTACKTOP - (argv_size / sizeof(long) + 1) * sizeof(long);
+    // 在字符串区下面再放一个 char* uargv[argc] 指针数组
+    char **uargv = (char **)(stacktop - argc * sizeof(char *));
+    argv_size = 0;
+    // 把 execve 的参数 argc/argv 从内核里的 kargv 复制到用户栈上
+    for (i = 0; i < argc; i++)
+    {
+        uargv[i] = strcpy((char *)(stacktop + argv_size), kargv[i]);
+        argv_size += strnlen(kargv[i], EXEC_MAX_ARG_LEN + 1) + 1;
+    }
+    // 再把 argc 写到 uargv 数组下面（栈再往下长一点）
+    stacktop = (uintptr_t)uargv - sizeof(int);
+    *(int *)stacktop = argc;
+
+    // (7) 设置用户态执行环境的 trapframe
+    // 拿到当前进程的 trapframe，并保存旧的 status
+    struct trapframe *tf = current->tf;
+    uintptr_t sstatus = tf->status;
+    // 清空 trapframe，避免带入脏寄存器值
+    memset(tf, 0, sizeof(struct trapframe));
+    // 设置用户态启动时的关键寄存器
+    tf->gpr.sp = stacktop; // 用户栈指针
+    tf->gpr.a0 = argc; // main(argc, argv)
+    tf->gpr.a1 = (uintptr_t)uargv;
+    tf->epc = elf->e_entry; // ELF 入口地址
+    // 设置 sstatus：返回到用户态、关内核态中断、开"返回后中断"
+    tf->status = (sstatus & ~SSTATUS_SPP & ~SSTATUS_SIE) | SSTATUS_SPIE;
+
+    ret = 0;
+out:
+    return ret;
+bad_cleanup_mmap:
+    exit_mmap(mm);
+bad_elf_cleanup_pgdir:
+    put_pgdir(mm);
+bad_pgdir_cleanup_mm:
+    mm_destroy(mm);
+bad_mm:
+    goto out;
 }
 
 // this function isn't very correct in LAB8
@@ -943,14 +1273,17 @@ user_main(void *arg)
 static int
 init_main(void *arg)
 {
+    cprintf("init_main: starting...\n");
     int ret;
     if ((ret = vfs_set_bootfs("disk0:")) != 0)
     {
         panic("set boot fs failed: %e.\n", ret);
     }
+    cprintf("init_main: vfs_set_bootfs done\n");
     size_t nr_free_pages_store = nr_free_pages();
     size_t kernel_allocated_store = kallocated();
 
+    cprintf("init_main: creating user_main thread...\n");
     int pid = kernel_thread(user_main, NULL, 0);
     if (pid <= 0)
     {

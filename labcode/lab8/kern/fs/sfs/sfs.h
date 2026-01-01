@@ -44,16 +44,16 @@ struct sfs_super {
     char info[SFS_MAX_INFO_LEN + 1];                /* infomation for sfs  */
 };
 
-/* inode (on disk) */
+/* inode（磁盘上的） */
 struct sfs_disk_inode {
-    uint32_t size;                                  /* size of the file (in bytes) */
-    uint16_t type;                                  /* one of SYS_TYPE_* above */
-    uint16_t nlinks;                                /* # of hard links to this file */
-    uint32_t blocks;                                /* # of blocks */
-    uint32_t direct[SFS_NDIRECT];                   /* direct blocks */
-    uint32_t indirect;                              /* indirect blocks */
-//    uint32_t db_indirect;                           /* double indirect blocks */
-//   unused
+    uint32_t size;                /* 文件大小（以字节为单位） */
+    uint16_t type;                /* 文件类型（上面定义的 SYS_TYPE_* 之一） */
+    uint16_t nlinks;              /* 指向该文件的硬链接数量 */
+    uint32_t blocks;              /* 文件占用的磁盘块数量 */
+    uint32_t direct[SFS_NDIRECT]; /* 直接块指针 */
+    uint32_t indirect;            /* 间接块指针 */
+    // uint32_t db_indirect;      /* 双重间接块指针 */
+    // 未使用
 };
 
 /* file entry (on disk) */
@@ -65,15 +65,15 @@ struct sfs_disk_entry {
 #define sfs_dentry_size                             \
     sizeof(((struct sfs_disk_entry *)0)->name)
 
-/* inode for sfs */
+/* sfs 的 inode 结构 */
 struct sfs_inode {
-    struct sfs_disk_inode *din;                     /* on-disk inode */
-    uint32_t ino;                                   /* inode number */
-    bool dirty;                                     /* true if inode modified */
-    int reclaim_count;                              /* kill inode if it hits zero */
-    semaphore_t sem;                                /* semaphore for din */
-    list_entry_t inode_link;                        /* entry for linked-list in sfs_fs */
-    list_entry_t hash_link;                         /* entry for hash linked-list in sfs_fs */
+    struct sfs_disk_inode *din;     /* 磁盘上的 inode（on-disk inode） */
+    uint32_t ino;                   /* inode 编号 */
+    bool dirty;                     /* inode 是否被修改过（脏标志） */
+    int reclaim_count;              /* 回收计数，降到 0 时销毁该 inode */
+    semaphore_t sem;                /* 保护 din 的信号量 */
+    list_entry_t inode_link;        /* 用于挂入 sfs_fs 中 inode 链表的链表节点 */
+    list_entry_t hash_link;         /* 用于挂入 sfs_fs 中 inode 哈希链表的链表节点 */
 };
 
 #define le2sin(le, member)                          \

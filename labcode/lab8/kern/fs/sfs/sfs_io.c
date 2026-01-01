@@ -8,14 +8,16 @@
 
 //Basic block-level I/O routines
 
-/* sfs_rwblock_nolock - Basic block-level I/O routine for Rd/Wr one disk block,
- *                      without lock protect for mutex process on Rd/Wr disk block
- * @sfs:   sfs_fs which will be process
- * @buf:   the buffer uesed for Rd/Wr
- * @blkno: the NO. of disk block
- * @write: BOOL: Read or Write
- * @check: BOOL: if check (blono < sfs super.blocks)
+/* sfs_rwblock_nolock - 基本的块级 I/O 例程，
+ *                      用于对**单个磁盘块**进行读/写操作，
+ *                      不对磁盘块的读/写过程进行互斥加锁保护
+ * @sfs:    要处理的 sfs 文件系统
+ * @buf:    用于读/写的缓冲区
+ * @blkno:  磁盘块号
+ * @write:  布尔值：表示读或写（0 为读，1 为写）
+ * @check:  布尔值：是否检查（blkno < sfs->super.blocks）
  */
+// 将某个磁盘块读/写到缓冲区
 static int
 sfs_rwblock_nolock(struct sfs_fs *sfs, void *buf, uint32_t blkno, bool write, bool check) {
     assert((blkno != 0 || !check) && blkno < sfs->super.blocks);
@@ -72,22 +74,24 @@ sfs_wblock(struct sfs_fs *sfs, void *buf, uint32_t blkno, uint32_t nblks) {
     return sfs_rwblock(sfs, buf, blkno, nblks, 1);
 }
 
-/* sfs_rbuf - The Basic block-level I/O routine for  Rd( non-block & non-aligned io) one disk block(using sfs->sfs_buffer)
- *            with lock protect for mutex process on Rd/Wr disk block
- * @sfs:    sfs_fs which will be process
- * @buf:    the buffer uesed for Rd
- * @len:    the length need to Rd
- * @blkno:  the NO. of disk block
- * @offset: the offset in the content of disk block
+/* sfs_rbuf - 基本的块级 I/O 读例程，
+ *            用于对**单个磁盘块**进行读取（非整块、非对齐的 I/O），
+ *            通过 sfs->sfs_buffer 作为中间缓冲区；
+ *            并对磁盘块的读/写操作加锁，以保证互斥访问
+ * @sfs:    要处理的 sfs 文件系统
+ * @buf:    用于读取数据的缓冲区
+ * @len:    需要读取的数据长度
+ * @blkno:  磁盘块号
+ * @offset: 在磁盘块内容中的偏移量
  */
 int
 sfs_rbuf(struct sfs_fs *sfs, void *buf, size_t len, uint32_t blkno, off_t offset) {
-    assert(offset >= 0 && offset < SFS_BLKSIZE && offset + len <= SFS_BLKSIZE);
+    assert(offset >= 0 && offset < SFS_BLKSIZE && offset + len <= SFS_BLKSIZE); // 检查读取位置需在块内且不能跨块
     int ret;
     lock_sfs_io(sfs);
     {
-        if ((ret = sfs_rwblock_nolock(sfs, sfs->sfs_buffer, blkno, 0, 1)) == 0) {
-            memcpy(buf, sfs->sfs_buffer + offset, len);
+        if ((ret = sfs_rwblock_nolock(sfs, sfs->sfs_buffer, blkno, 0, 1)) == 0) { // 都整块到缓冲区
+            memcpy(buf, sfs->sfs_buffer + offset, len); // 从块中拷贝需要的一段
         }
     }
     unlock_sfs_io(sfs);

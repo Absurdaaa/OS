@@ -8,6 +8,8 @@
 #include <riscv.h>
 #include <kmalloc.h>
 
+volatile unsigned int pgfault_num = 0;
+
 /*
   vmm design include two parts: mm_struct (mm) & vma_struct (vma)
   mm is the memory manager for the set of continuous virtual memory
@@ -36,6 +38,19 @@
 
 static void check_vmm(void);
 static void check_vma_struct(void);
+
+static inline uint32_t
+perm_from_flags(uint32_t vm_flags)
+{
+    uint32_t perm = PTE_U;
+    if (vm_flags & VM_READ)
+        perm |= PTE_R;
+    if (vm_flags & VM_WRITE)
+        perm |= PTE_W | PTE_R;
+    if (vm_flags & VM_EXEC)
+        perm |= PTE_X;
+    return perm;
+}
 
 // mm_create -  alloc a mm_struct & initialize it.
 struct mm_struct *
@@ -349,6 +364,40 @@ check_vma_struct(void)
 
     cprintf("check_vma_struct() succeeded!\n");
 }
+
+int do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr)
+{
+    pgfault_num++;
+
+    if (mm == NULL)
+    {
+        return -E_INVAL;
+    }
+
+    struct vma_struct *vma = find_vma(mm, addr);
+    if (vma == NULL || addr < vma->vm_start)
+    {
+        return -E_INVAL;
+    }
+
+    uintptr_t la = ROUNDDOWN(addr, PGSIZE);
+    pte_t *ptep = get_pte(mm->pgdir, la, 1);
+    if (ptep == NULL)
+    {
+        return -E_NO_MEM;
+    }
+
+    if (!(*ptep & PTE_V))
+    {
+        uint32_t perm = perm_from_flags(vma->vm_flags);
+        if (pgdir_alloc_page(mm->pgdir, la, perm) == NULL)
+        {
+            return -E_NO_MEM;
+        }
+    }
+    return 0;
+}
+
 bool user_mem_check(struct mm_struct *mm, uintptr_t addr, size_t len, bool write)
 {
     if (mm != NULL)
