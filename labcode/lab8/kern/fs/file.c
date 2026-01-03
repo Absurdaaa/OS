@@ -166,10 +166,12 @@ file_open(char *path, uint32_t open_flags) {
         return -E_INVAL;
     }
     int ret;
+    // 初始化 file 结构体
     struct file *file;
     if ((ret = fd_array_alloc(NO_FD, &file)) != 0) {
         return ret;
     }
+    // 打开文件，获取 inode 结构体
     struct inode *node;
     if ((ret = vfs_open(path, open_flags, &node)) != 0) {
         fd_array_free(file);
@@ -218,12 +220,13 @@ file_read(int fd, void *base, size_t len, size_t *copied_store) {
     }
     fd_array_acquire(file);
 
+    // 构造读写缓冲区 iobuf
     struct iobuf __iob, *iob = iobuf_init(&__iob, base, len, file->pos);
     ret = vop_read(file->node, iob);
 
     size_t copied = iobuf_used(iob);
     if (file->status == FD_OPENED) {
-        file->pos += copied;
+        file->pos += copied;// 更新文件偏移量
     }
     *copied_store = copied;
     fd_array_release(file);

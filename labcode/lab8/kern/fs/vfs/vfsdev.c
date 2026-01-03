@@ -115,7 +115,7 @@ vfs_get_devname(struct fs *fs) {
 }
 
 /*
- * check_devname_confilct - Is there alreadily device which has the same name?
+ * check_devname_confilct - Is there alreadily device which has the same name?检查是否有同名设备。
  */
 static bool
 check_devname_conflict(const char *devname) {
@@ -199,6 +199,8 @@ vfs_add_dev(const char *devname, struct inode *devnode, bool mountable) {
 /*
  * find_mount - Look for a mountable device named DEVNAME.
  *              Should already hold vdev_list lock.
+ *             找这个名字的设备，如果找到了，就把它存到 VDEV_STORE 里。
+ *             如果找不到，就返回 -E_NO_DEV 错误码。
  */
 static int
 find_mount(const char *devname, vfs_dev_t **vdev_store) {
@@ -219,6 +221,17 @@ find_mount(const char *devname, vfs_dev_t **vdev_store) {
  *             set up the filesystem and hand back a struct fs.
  *
  * The DATA argument is passed through unchanged to MOUNTFUNC.
+ */
+
+/*
+ * vfs_mount - 挂载一个文件系统。一旦我们找到对应的存储设备，就调用 MOUNTFUNC 函数
+ *             来完成文件系统的初始化配置，并返回一个 fs 结构体实例。
+ *
+ * 1. 先找到对应名称的设备。然后检查该设备是否已经挂载了文件系统。
+ * 2. 初始化设备配置dev
+ * 3. 调用 MOUNTFUNC 函数来完成文件系统的挂载操作，并将结果存储在 vdev->fs 中。
+ *
+ * DATA 参数会保持原样（不做任何修改）传递给 MOUNTFUNC 函数。
  */
 int
 vfs_mount(const char *devname, int (*mountfunc)(struct device *dev, struct fs **fs_store)) {
@@ -249,6 +262,11 @@ out:
  * vfs_unmount - Unmount a filesystem/device by name.
  *               First calls FSOP_SYNC on the filesystem; then calls FSOP_UNMOUNT.
  */
+
+/**
+ * vfs_unmount - 通过设备名称卸载一个文件系统/设备。
+ *
+ */
 int
 vfs_unmount(const char *devname) {
     int ret;
@@ -278,11 +296,12 @@ out:
 
 /*
  * vfs_unmount_all - Global unmount function.
+ * 卸载所有已挂载的文件系统。
  */
 int
 vfs_unmount_all(void) {
     if (!list_empty(&vdev_list)) {
-        lock_vdev_list();
+        lock_vdev_list();// 上锁
         {
             list_entry_t *list = &vdev_list, *le = list;
             while ((le = list_next(le)) != list) {

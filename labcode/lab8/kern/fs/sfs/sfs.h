@@ -37,10 +37,19 @@
 /*
  * On-disk superblock
  */
+
+// 包含了关于文件系统的所有关键参数，当计算机被启动或文件系统被首次接触时，超级块的内容就会被装入内存。
+// 超级块
 struct sfs_super {
+    // 文件系统的魔数，用于验证文件系统的类型和完整性
+    //其值为 0x2f8dbe2a，内核通过它来检查磁盘镜像是否是合法的 SFS 文件系统img
     uint32_t magic;                                 /* magic number, should be SFS_MAGIC */
+    // 文件系统的总块数，，即 img 的大小
     uint32_t blocks;                                /* # of blocks in fs */
+    // 没有被使用的块数
     uint32_t unused_blocks;                         /* # of unused blocks in fs */
+    // 文件系统的信息描述
+    // 包含了字符串simple file system
     char info[SFS_MAX_INFO_LEN + 1];                /* infomation for sfs  */
 };
 
@@ -79,18 +88,22 @@ struct sfs_inode {
 #define le2sin(le, member)                          \
     to_struct((le), struct sfs_inode, member)
 
-/* filesystem for sfs */
-struct sfs_fs {
-    struct sfs_super super;                         /* on-disk superblock */
-    struct device *dev;                             /* device mounted on */
-    struct bitmap *freemap;                         /* blocks in use are mared 0 */
-    bool super_dirty;                               /* true if super/freemap modified */
-    void *sfs_buffer;                               /* buffer for non-block aligned io */
-    semaphore_t fs_sem;                             /* semaphore for fs */
-    semaphore_t io_sem;                             /* semaphore for io */
-    semaphore_t mutex_sem;                          /* semaphore for link/unlink and rename */
-    list_entry_t inode_list;                        /* inode linked-list */
-    list_entry_t *hash_list;                        /* inode hash linked-list */
+/**
+ * struct sfs_fs - SFS文件系统的核心控制结构体（内存中）
+ *                用于管理SFS文件系统的整体状态、设备关联、资源锁及索引节点等核心资源
+ */
+struct sfs_fs
+{
+  struct sfs_super super;  /* 磁盘上的超级块（存储文件系统的全局元数据） */
+  struct device *dev;      /* 该文件系统挂载的目标存储设备 */
+  struct bitmap *freemap;  /* 块空闲位图（已被使用的块标记为0，未使用的块标记为1） */
+  bool super_dirty;        /* 超级块/空闲位图是否被修改（脏标记：为true时需刷写到磁盘） */
+  void *sfs_buffer;        /* 用于非块对齐I/O操作的缓冲区（解决数据读写与设备块大小不匹配的问题） */
+  semaphore_t fs_sem;      /* 保护整个文件系统的信号量（全局文件系统操作互斥/同步） */
+  semaphore_t io_sem;      /* 保护I/O操作的信号量（用于控制磁盘读写操作的并发访问） */
+  semaphore_t mutex_sem;   /* 保护链接/解除链接及重命名操作的信号量（保证文件目录操作的原子性） */
+  list_entry_t inode_list; /* 索引节点（inode）链表（管理内存中所有活跃的索引节点） */
+  list_entry_t *hash_list; /* 索引节点（inode）哈希链表（用于快速查找索引节点，提高查询效率） */
 };
 
 /* hash for sfs */

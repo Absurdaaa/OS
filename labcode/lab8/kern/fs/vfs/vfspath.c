@@ -41,6 +41,7 @@ unlock_cfs(void) {
 /*
  *  vfs_get_curdir - Get current directory as a inode.
  */
+// 获取当前工作目录的 inode
 int
 vfs_get_curdir(struct inode **dir_store) {
     struct inode *node;

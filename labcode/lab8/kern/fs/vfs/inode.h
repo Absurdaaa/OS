@@ -27,18 +27,21 @@ struct iobuf;
  * need to worry about it.
  */
 struct inode {
+    //包含不同文件系统特定inode信息的union成员变量
     union {
-        struct device __device_info;
-        struct sfs_inode __sfs_inode_info;
+      struct device __device_info;       // 设备文件系统内存inode信息
+      struct sfs_inode __sfs_inode_info; // SFS文件系统内存inode信息
     } in_info;
+    // 此inode所属文件系统类型
     enum {
         inode_type_device_info = 0x1234,
         inode_type_sfs_inode_info,
     } in_type;
-    int ref_count;
-    int open_count;
-    struct fs *in_fs;
-    const struct inode_ops *in_ops;
+
+    int ref_count;  // 此inode的引用计数
+    int open_count; //打开此inode对应文件的个数
+    struct fs *in_fs; // 抽象的文件系统，包含访问文件系统的函数指针
+    const struct inode_ops *in_ops; // 抽象的inode操作，包含访问inode的函数指针
 };
 
 #define __in_type(type)                                             inode_type_##type##_info
@@ -165,6 +168,82 @@ void inode_kill(struct inode *node);
  *                      DIR, and hand back the inode for the file it
  *                      refers to. May destroy PATHNAME. Should increment
  *                      refcount on inode handed back.
+ */
+/*
+ * 索引节点（inode）的抽象操作集合。
+ *
+ * 这些操作以 VOP_FOO(inode, args) 的形式调用，该宏会展开为
+ * inode->inode_ops->vop_foo(inode, args)。其中各类操作 "foo" 的含义如下：
+ *
+ *    vop_open        - 在文件执行 open() 操作时被调用。可用于拒绝非法或不期望的打开模式。
+ *                      注意：即使文件未被实际打开，也可以执行多种操作。
+ *                      索引节点（inode）无需处理 O_CREAT、O_EXCL 或 O_TRUNC 标志，
+ *                      这些标志由虚拟文件系统（VFS）层统一处理。
+ *
+ *                      注意：不应在 VFS 层之上直接调用 VOP_EACHOPEN —— 应使用 vfs_open()
+ *                      来打开索引节点。该函数会维护文件打开计数，确保 VOP_LASTCLOSE
+ *                      在正确的时机被调用。
+ *
+ *    vop_close       - 在文件执行 *最后一次* close() 操作时被调用。
+ *
+ *                      注意：不应在 VFS 层之上直接调用 VOP_LASTCLOSE —— 应使用 vfs_close()
+ *                      来关闭通过 vfs_open() 打开的索引节点。
+ *
+ *    vop_reclaim     - 当索引节点不再被使用时被调用。注意：该操作的调用时机
+ *                      可能远晚于 vop_lastclose 的调用时机。
+ *
+ *****************************************
+ *
+ *    vop_read        - 从文件中读取数据到 uio 结构体中，读取的偏移量由 uio 结构体指定，
+ *                      同时更新 uio_resid 字段以反映剩余未读取的字节数，并同步更新 uio_offset
+ *                      字段（记录当前读取偏移）。
+ *                      该操作不允许对目录或符号链接执行。
+ *
+ *    vop_getdirentry - 从目录中读取单个文件名到 uio 结构体中，根据 uio 结构体的 offset
+ *                      字段决定读取哪个文件名，并更新该 offset 字段。
+ *                      与普通文件 I/O 不同，offset 字段的值不会在文件系统外部被解析，
+ *                      因此它不一定是字节计数。但 uio_resid 字段仍需按照常规方式处理。
+ *                      若对非目录对象执行该操作，应返回 ENOTDIR 错误（非目录错误）。
+ *
+ *    vop_write       - 从 uio 结构体中将数据写入文件，写入的偏移量由 uio 结构体指定，
+ *                      同时更新 uio_resid 字段以反映剩余未写入的字节数，并同步更新 uio_offset
+ *                      字段（记录当前写入偏移）。
+ *                      该操作不允许对目录或符号链接执行。
+ *
+ *    vop_ioctl       - 对文件执行编号为 OP 的 ioctl 控制操作，操作数据为 DATA。
+ *                      数据的具体含义与每个 ioctl 操作自身相关（不同操作对应不同数据格式）。
+ *
+ *    vop_fstat       - 返回文件的相关信息。传入的指针指向 stat 结构体（详见 stat.h 头文件）。
+ *
+ *    vop_gettype     - 返回文件的类型。文件类型的取值定义在 sfs.h 头文件中。
+ *
+ *    vop_tryseek     - 检查将文件偏移量定位到指定位置是否合法。
+ *                      （例如：对串口设备执行任何定位操作都是非法的；
+ *                        对于固定大小的文件，将偏移量定位到文件末尾（EOF）之后也可能是非法的。）
+ *
+ *    vop_fsync       - 将与该文件关联的所有脏缓冲区（未写入持久存储的缓存数据）强制刷新到
+ *                      持久化存储设备中。
+ *
+ *    vop_truncate    - 将文件大小强制设置为传入的长度值，丢弃超出该长度的所有数据块。
+ *
+ *    vop_namefile    - 计算该文件相对于文件系统根目录的路径名，并将其复制到指定的 io 缓冲区中。
+ *                      该操作无需支持非目录类型的对象。
+ *
+ *****************************************
+ *
+ *    vop_creat       - 在传入的目录 DIR 中创建一个名为 NAME 的普通文件。
+ *                      若布尔值 EXCL 为真（true），则当文件已存在时创建失败；
+ *                      若为假（false），则当文件已存在时直接使用该现有文件。
+ *                      与 vop_lookup 操作类似，返回该文件对应的索引节点。
+ *
+ *****************************************
+ *
+ *    vop_lookup      - 相对于传入的目录 DIR 解析路径名 PATHNAME，并返回该路径名指向的
+ *                      文件对应的索引节点。该操作可能会销毁 PATHNAME（占用的内存）。
+ *                      对于返回的索引节点，应将其引用计数递增。
+ */
+/**
+ * inode_ops 是对常规文件、目录、设备文件所有操作的一个抽象函数表示。对于某一具体的文件系统中的文件或目录，只需实现相关的函数，就可以被用户进程访问具体的文件了，且用户进程无需了解具体文件系统的实现细节。
  */
 struct inode_ops {
     unsigned long vop_magic;

@@ -41,6 +41,7 @@ unlock_bootfs(void) {
 }
 
 // change_bootfs - set the new fs inode 
+// 修改系统启动时的根文件系统的inode
 static void
 change_bootfs(struct inode *node) {
     struct inode *old;
@@ -76,6 +77,7 @@ vfs_set_bootfs(char *fsname) {
 }
 
 // vfs_get_bootfs - get the inode of bootfs
+// bootfs_node是系统启动时的根文件系统的inode
 int
 vfs_get_bootfs(struct inode **node_store) {
     struct inode *node = NULL;

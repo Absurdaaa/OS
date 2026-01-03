@@ -68,6 +68,7 @@ get_device(char *path, char **subpath, struct inode **node_store) {
 /*
  * vfs_lookup - get the inode according to the path filename
  */
+// 查找路径对应的inode节点
 int
 vfs_lookup(char *path, struct inode **node_store) {
     int ret;

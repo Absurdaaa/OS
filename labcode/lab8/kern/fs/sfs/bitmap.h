@@ -3,7 +3,8 @@
 
 #include <defs.h>
 
-
+// 实现了一个位图（bitmap）数据结构，用于管理固定大小的位数组，通常用于存储管理任务。
+// 这里用于SFS 的 freemap 区域，查看哪些数据块是空闲的，哪些是已分配的。
 /*
  * Fixed-size array of bits. (Intended for storage management.)
  *
@@ -17,7 +18,6 @@
  *     bitmap_isset   - return whether a particular bit is set or not.
  *     bitmap_destroy - destroy bitmap.
  */
-
 
 struct bitmap;
 

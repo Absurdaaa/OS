@@ -124,6 +124,7 @@ sfs_init_read(struct device *dev, uint32_t blkno, void *blk_buffer) {
  *      (1) get data addr in bitmap
  *      (2) read dev into iobuf
  */
+// 用位图来初始化一个freemap，记录哪些块是空闲的，哪些块是被占用的
 static int
 sfs_init_freemap(struct device *dev, struct bitmap *freemap, uint32_t blkno, uint32_t nblks, void *blk_buffer) {
     size_t len;
@@ -140,7 +141,7 @@ sfs_init_freemap(struct device *dev, struct bitmap *freemap, uint32_t blkno, uin
 }
 
 /*
- * sfs_do_mount - mount sfs file system.
+ * sfs_do_mount - mount sfs file system. 挂载sfs文件系统
  *
  * @dev:        the block device contains sfs file system
  * @fs_store:   the fs struct in memroy
@@ -156,6 +157,7 @@ sfs_do_mount(struct device *dev, struct fs **fs_store) {
     }
 
     /* allocate fs structure */
+    // 初始化 fs 结构体：文件系统
     struct fs *fs;
     if ((fs = alloc_fs(sfs)) == NULL) {
         return -E_NO_MEM;
@@ -164,13 +166,14 @@ sfs_do_mount(struct device *dev, struct fs **fs_store) {
     sfs->dev = dev;
 
     int ret = -E_NO_MEM;
-
+    // 申请一个块大小的缓冲区，用于后续读取超级块和其他数据
     void *sfs_buffer;
     if ((sfs->sfs_buffer = sfs_buffer = kmalloc(SFS_BLKSIZE)) == NULL) {
         goto failed_cleanup_fs;
     }
 
     /* load and check superblock */
+    // 生成超级块，并检查超级块的合法性
     if ((ret = sfs_init_read(dev, SFS_BLKN_SUPER, sfs_buffer)) != 0) {
         goto failed_cleanup_sfs_buffer;
     }
@@ -196,6 +199,7 @@ sfs_do_mount(struct device *dev, struct fs **fs_store) {
     uint32_t i;
 
     /* alloc and initialize hash list */
+    // 分配hash表空间，并初始化hash表，用于快速查找inode
     list_entry_t *hash_list;
     if ((sfs->hash_list = hash_list = kmalloc(sizeof(list_entry_t) * SFS_HLIST_SIZE)) == NULL) {
         goto failed_cleanup_sfs_buffer;
@@ -205,6 +209,7 @@ sfs_do_mount(struct device *dev, struct fs **fs_store) {
     }
 
     /* load and check freemap */
+    // 生产freemap位图，并初始化block的使用情况
     struct bitmap *freemap;
     uint32_t freemap_size_nbits = sfs_freemap_bits(super);
     if ((sfs->freemap = freemap = bitmap_create(freemap_size_nbits)) == NULL) {

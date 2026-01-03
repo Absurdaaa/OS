@@ -1,3 +1,6 @@
+/**
+ * 构造好“一块符合SFS文件系统的硬盘”
+ */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>

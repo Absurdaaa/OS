@@ -11,6 +11,7 @@ struct inode;
 struct stat;
 struct dirent;
 
+// 文件：从进程的角度描述一个打开的文件的信息
 struct file {
     enum {
         FD_NONE, FD_INIT, FD_OPENED, FD_CLOSED,
@@ -18,8 +19,8 @@ struct file {
     bool readable;
     bool writable;
     int fd;
-    off_t pos;
-    struct inode *node;
+    off_t pos;// 文件偏移量？
+    struct inode *node;// 指向文件的inode
     int open_count;
 };
 

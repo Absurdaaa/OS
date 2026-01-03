@@ -452,6 +452,7 @@ sfs_dirent_read_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, int slot, stru
  * sfs_dirent_search_nolock - 读取目录（DIR）中的所有文件目录项，
  *                            将给定的文件名与每个 entry->name 进行比较；
  *                            若相等，则返回该目录项的 slot 以及该文件 inode 的磁盘号
+ * 查找与路径名匹配的目录项
  * @sfs:         sfs 文件系统
  * @sin:         内存中的 sfs inode
  * @name:        文件名
@@ -469,6 +470,7 @@ sfs_dirent_search_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, const char *
     }
 
 #define set_pvalue(x, v)            do { if ((x) != NULL) { *(x) = (v); } } while (0)
+
     int ret, i, nslots = sin->din->blocks;
     set_pvalue(empty_slot, nslots);
     for (i = 0; i < nslots; i ++) {
@@ -1033,18 +1035,24 @@ out_unlock:
  *              DIR, and hand back the inode for the file it
  *              refers to.
  */
+// 根据文件路径查找对应的 inode
+/**
+ * 其中node是根目录“/”所对应的inode节点；
+ * path是文件sfs_filetest1的绝对路径/sfs_filetest1
+ * 而node_store是经过查找获得的sfs_filetest1所对应的inode节点。
+ */
 static int
 sfs_lookup(struct inode *node, char *path, struct inode **node_store) {
     struct sfs_fs *sfs = fsop_info(vop_fs(node), sfs);
     assert(*path != '\0' && *path != '/');
-    vop_ref_inc(node);
-    struct sfs_inode *sin = vop_info(node, sfs_inode);
-    if (sin->din->type != SFS_TYPE_DIR) {
+    vop_ref_inc(node);// 增加引用计数
+    struct sfs_inode *sin = vop_info(node, sfs_inode);// 获取内存中的 sfs inode
+    if (sin->din->type != SFS_TYPE_DIR) {// 不是目录，返回错误
         vop_ref_dec(node);
         return -E_NOTDIR;
     }
-    struct inode *subnode;
-    int ret = sfs_lookup_once(sfs, sin, path, &subnode, NULL);
+    struct inode *subnode;// 子节点 inode
+    int ret = sfs_lookup_once(sfs, sin, path, &subnode, NULL);// 查找子节点
 
     vop_ref_dec(node);
     if (ret != 0) {
